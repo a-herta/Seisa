@@ -112,18 +112,18 @@ add_tproxy_rules() {
     $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp --dport 53 -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
   fi
 
-  log_safe "🏠 放行内网 IP 流量..."
   for ip in $lan_ips; do
+    log_safe "🏠 放行内网/组播 IP($ip) 流量..."
     $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -d "$ip" -j RETURN
   done
 
   log_safe "♻️ 重定向 lo 回环流量..."
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -i lo -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp -i lo -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -i lo -d "$local_ip" -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp -i lo -d "$local_ip" -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
 
   if [ "$AP_LIST" != "" ]; then
-    log_safe "📡 重定向 AP 接口流量"
     for ap in $AP_LIST; do
+      log_safe "📡 重定向 AP($ap) 接口流量..."
       $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -i "$ap" -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
       $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp -i "$ap" -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
     done
@@ -137,14 +137,14 @@ add_tproxy_rules() {
   $ip_cmd -w 100 -t mangle -F "$CHAIN_OUT" 2>/dev/null || true
 
   log_safe "👤 放行 $TPROXY_USER($USER_ID:$GROUP_ID) 本身流量..."
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" -j RETURN
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -j RETURN
 
   log_safe "👻 重定向 FakeIP($fire) 流量..."
   $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -d "$fire" -j MARK --set-xmark "$MARK_ID"
 
   if [ "$IGNORE_LIST" != "" ]; then
-    log_safe "🚫 放行忽略列表接口流量..."
     for ignore in $IGNORE_LIST; do
+      log_safe "🚫 放行 $ignore 接口流量..."
       $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -o "$ignore" -j RETURN
     done
   fi
@@ -158,8 +158,8 @@ add_tproxy_rules() {
     $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp --dport 53 -j MARK --set-xmark "$MARK_ID"
   fi
 
-  log_safe "🏠 放行内网 IP 流量..."
   for ip in $lan_ips; do
+    log_safe "🏠 放行内网/组播 IP($ip) 流量..."
     $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -d "$ip" -j RETURN
   done
 
@@ -292,7 +292,7 @@ remove_tproxy_rules() {
   $ip_cmd -w 100 -t mangle -F "$CHAIN_PRE" 2>/dev/null || true
   $ip_cmd -w 100 -t mangle -X "$CHAIN_PRE" 2>/dev/null || true
 
-  $ip_cmd -w 100 -D OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT
+  $ip_cmd -w 100 -D OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || true
   $ip_cmd -w 100 -D OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner 0 -m tcp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || true
 
   if $ip_cmd -t nat -nL >/dev/null 2>&1; then
@@ -305,8 +305,8 @@ remove_tproxy_rules() {
     $ip_cmd -w 100 -t nat -F CLASH_DNS_PRE 2>/dev/null || true
     $ip_cmd -w 100 -t nat -X CLASH_DNS_PRE 2>/dev/null || true
 
-    $ip_cmd -w 100 -t nat -D OUTPUT -d "$fire" -p icmp -j DNAT --to-destination "$local_ip"
-    $ip_cmd -w 100 -t nat -D PREROUTING -d "$fire" -p icmp -j DNAT --to-destination "$local_ip"
+    $ip_cmd -w 100 -t nat -D OUTPUT -d "$fire" -p icmp -j DNAT --to-destination "$local_ip" 2>/dev/null || true
+    $ip_cmd -w 100 -t nat -D PREROUTING -d "$fire" -p icmp -j DNAT --to-destination "$local_ip" 2>/dev/null || true
   fi
 }
 
