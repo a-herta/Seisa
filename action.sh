@@ -17,8 +17,10 @@ log_safe "🎬 正在切换服务状态..."
 
 if [ -f "$FLAG" ]; then
   log_safe "⛔ 服务已运行, 正在停止..."
-  $SERVICE stop >/dev/null 2>&1 || abort_safe "❌ 服务 $(basename "$SERVICE") 停止失败"
+  sh "$SERVICE" stop >/dev/null 2>&1 || abort_safe "❌ 服务 $(basename "$SERVICE") 停止失败"
+  log_safe "✅ 服务 $(basename "$SERVICE") 停止成功"
 else
   log_safe "🚀 服务未运行, 正在启动..."
-  $SERVICE >/dev/null 2>&1 || log_safe "❌ 服务 $(basename "$SERVICE") 启动失败"
+  sh "$SERVICE" >/dev/null 2>&1 || log_safe "❌ 服务 $(basename "$SERVICE") 启动失败"
+  log_safe "✅ 服务 $(basename "$SERVICE") 启动成功"
 fi

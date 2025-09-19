@@ -7,45 +7,31 @@
     "servers": [
       {
         "type": "quic",
-        "tag": "dns-local",
+        "tag": "aliyun",
         "server": "223.5.5.5"
       },
       {
-        "type": "h3",
-        "tag": "dns-remote",
-        "domain_resolver": "dns-local",
-        "server": "dns.google.com"
-      },
-      {
         "type": "fakeip",
-        "tag": "fakeip",
-        "inet4_range": "172.20.0.1/16",
+        "tag": "remote",
+        "inet4_range": "198.18.0.0/15",
         "inet6_range": "fc00::/18"
       }
     ],
     "rules": [
       {
-        "source_ip_is_private": true,
-        "server": "dns-local"
-      },
-      {
         "rule_set": "category-ads-all",
         "action": "reject"
       },
       {
-        "clash_mode": "direct",
-        "server": "dns-local"
-      },
-      {
-        "clash_mode": "global",
-        "server": "dns-remote"
+        "source_ip_is_private": true,
+        "server": "aliyun"
       },
       {
         "query_type": [
           "A",
           "AAAA"
         ],
-        "server": "fakeip"
+        "server": "remote"
       }
     ],
     "strategy": "prefer_ipv4",
@@ -54,9 +40,10 @@
   "inbounds": [
     {
       "type": "tproxy",
-      "tag": "tproxy-in",
       "listen": "::",
-      "listen_port": 1536
+      "listen_port": 1536,
+      "tcp_fast_open": true,
+      "udp_fragment": true
     }
   ],
   "outbounds": [
@@ -73,7 +60,8 @@
         "US",
         "SG",
         "Direct"
-      ]
+      ],
+      "default": "JP"
     },
     {
       "type": "direct",
@@ -286,16 +274,26 @@
       "type": "selector",
       "tag": "Available",
       "outbounds": [
-        "...you need add"
+        "🇭🇰 HK-香港 TCP",
+        "🇯🇵 JP-日本 TCP",
+        "🇹🇼 TW-台湾 TCP",
+        "🇸🇬 SG-新加坡 TCP",
+        "🇰🇷 KR-韩国 TCP",
+        "🇺🇸 US-美国 TCP"
       ]
     },
     {
       "type": "urltest",
       "tag": "Auto",
       "outbounds": [
-        "...you need add"
+        "🇭🇰 HK-香港 TCP",
+        "🇯🇵 JP-日本 TCP",
+        "🇹🇼 TW-台湾 TCP",
+        "🇸🇬 SG-新加坡 TCP",
+        "🇰🇷 KR-韩国 TCP",
+        "🇺🇸 US-美国 TCP"
       ],
-      "url": "http://www.gstatic.com/generate_204",
+      "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
       "tolerance": 50
     },
@@ -303,9 +301,9 @@
       "type": "urltest",
       "tag": "HK",
       "outbounds": [
-        "...you need add"
+        "🇭🇰 HK-香港 TCP"
       ],
-      "url": "http://www.gstatic.com/generate_204",
+      "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
       "tolerance": 50
     },
@@ -313,9 +311,9 @@
       "type": "urltest",
       "tag": "TW",
       "outbounds": [
-        "...you need add"
+        "🇹🇼 TW-台湾 TCP"
       ],
-      "url": "http://www.gstatic.com/generate_204",
+      "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
       "tolerance": 50
     },
@@ -323,9 +321,9 @@
       "type": "urltest",
       "tag": "JP",
       "outbounds": [
-        "...you need add"
+        "🇯🇵 JP-日本 TCP"
       ],
-      "url": "http://www.gstatic.com/generate_204",
+      "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
       "tolerance": 50
     },
@@ -333,9 +331,9 @@
       "type": "urltest",
       "tag": "KR",
       "outbounds": [
-        "...you need add"
+        "🇰🇷 KR-韩国 TCP"
       ],
-      "url": "http://www.gstatic.com/generate_204",
+      "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
       "tolerance": 50
     },
@@ -343,9 +341,9 @@
       "type": "urltest",
       "tag": "US",
       "outbounds": [
-        "...you need add"
+        "🇺🇸 US-美国 TCP"
       ],
-      "url": "http://www.gstatic.com/generate_204",
+      "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
       "tolerance": 50
     },
@@ -353,13 +351,72 @@
       "type": "urltest",
       "tag": "SG",
       "outbounds": [
-        "...you need add"
+        "🇸🇬 SG-新加坡 TCP"
       ],
-      "url": "http://www.gstatic.com/generate_204",
+      "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
       "tolerance": 50
     },
-    "Server settings here..."
+    {
+      "type": "vmess",
+      "tag": "🇭🇰 HK-香港 TCP",
+      "tcp_fast_open": true,
+      "udp_fragment": true,
+      "server": "hk.example.vip",
+      "server_port": 443,
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "security": "auto"
+    },
+    {
+      "type": "vmess",
+      "tag": "🇯🇵 JP-日本 TCP",
+      "tcp_fast_open": true,
+      "udp_fragment": true,
+      "server": "jp.example.vip",
+      "server_port": 443,
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "security": "auto"
+    },
+    {
+      "type": "vmess",
+      "tag": "🇹🇼 TW-台湾 TCP",
+      "tcp_fast_open": true,
+      "udp_fragment": true,
+      "server": "tw.example.vip",
+      "server_port": 443,
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "security": "auto"
+    },
+    {
+      "type": "vmess",
+      "tag": "🇸🇬 SG-新加坡 TCP",
+      "tcp_fast_open": true,
+      "udp_fragment": true,
+      "server": "sg.example.vip",
+      "server_port": 443,
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "security": "auto"
+    },
+    {
+      "type": "vmess",
+      "tag": "🇰🇷 KR-韩国 TCP",
+      "tcp_fast_open": true,
+      "udp_fragment": true,
+      "server": "kr.example.vip",
+      "server_port": 443,
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "security": "auto"
+    },
+    {
+      "type": "vmess",
+      "tag": "🇺🇸 US-美国 TCP",
+      "tcp_fast_open": true,
+      "udp_fragment": true,
+      "server": "us.example.vip",
+      "server_port": 443,
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "security": "auto"
+    }
   ],
   "route": {
     "rules": [
@@ -367,16 +424,7 @@
         "action": "sniff"
       },
       {
-        "type": "logical",
-        "mode": "or",
-        "rules": [
-          {
-            "port": 53
-          },
-          {
-            "protocol": "dns"
-          }
-        ],
+        "protocol": "dns",
         "action": "hijack-dns"
       },
       {
@@ -392,7 +440,6 @@
         "action": "reject"
       },
       {
-        "ip_is_private": true,
         "rule_set": [
           "private",
           "private-ip"
@@ -505,181 +552,181 @@
       {
         "type": "remote",
         "tag": "category-ads-all",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/category-ads-all.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-ads-all.srs"
       },
       {
         "type": "remote",
         "tag": "private",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/private.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/private.srs"
       },
       {
         "type": "remote",
         "tag": "category-ai-!cn",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/category-ai-!cn.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-ai-!cn.srs"
       },
       {
         "type": "remote",
         "tag": "telegram",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/telegram.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/telegram.srs"
       },
       {
         "type": "remote",
         "tag": "twitter",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/twitter.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/twitter.srs"
       },
       {
         "type": "remote",
         "tag": "facebook",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/facebook.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/facebook.srs"
       },
       {
         "type": "remote",
         "tag": "bahamut",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/bahamut.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/bahamut.srs"
       },
       {
         "type": "remote",
         "tag": "bilibili",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/bilibili.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/bilibili.srs"
       },
       {
         "type": "remote",
         "tag": "dmm",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/dmm.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/dmm.srs"
       },
       {
         "type": "remote",
         "tag": "tiktok",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/tiktok.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/tiktok.srs"
       },
       {
         "type": "remote",
         "tag": "spotify",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/spotify.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/spotify.srs"
       },
       {
         "type": "remote",
         "tag": "hbo",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/hbo.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/hbo.srs"
       },
       {
         "type": "remote",
         "tag": "disney",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/disney.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/disney.srs"
       },
       {
         "type": "remote",
         "tag": "netflix",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/netflix.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/netflix.srs"
       },
       {
         "type": "remote",
         "tag": "primevideo",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/primevideo.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/primevideo.srs"
       },
       {
         "type": "remote",
         "tag": "amazon",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/amazon.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/amazon.srs"
       },
       {
         "type": "remote",
         "tag": "category-games@cn",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/category-games@cn.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-games@cn.srs"
       },
       {
         "type": "remote",
         "tag": "category-games-!cn",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/category-games-!cn.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-games-!cn.srs"
       },
       {
         "type": "remote",
         "tag": "microsoft@cn",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/microsoft@cn.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/microsoft@cn.srs"
       },
       {
         "type": "remote",
         "tag": "microsoft",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/microsoft.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/microsoft.srs"
       },
       {
         "type": "remote",
         "tag": "apple",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/apple.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/apple.srs"
       },
       {
         "type": "remote",
         "tag": "google",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/google.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/google.srs"
       },
       {
         "type": "remote",
         "tag": "geolocation-!cn",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/geolocation-!cn.srs"
       },
       {
         "type": "remote",
         "tag": "cn",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/cn.srs"
       },
       {
         "type": "remote",
         "tag": "private-ip",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo-lite/geoip/private.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/private.srs"
       },
       {
         "type": "remote",
         "tag": "telegram-ip",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo-lite/geoip/telegram.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/telegram.srs"
       },
       {
         "type": "remote",
         "tag": "twitter-ip",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo-lite/geoip/twitter.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/twitter.srs"
       },
       {
         "type": "remote",
         "tag": "facebook-ip",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo-lite/geoip/facebook.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/facebook.srs"
       },
       {
         "type": "remote",
         "tag": "bilibili-ip",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo-lite/geoip/bilibili.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/bilibili.srs"
       },
       {
         "type": "remote",
         "tag": "netflix-ip",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo-lite/geoip/netflix.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/netflix.srs"
       },
       {
         "type": "remote",
         "tag": "cloudflare-ip",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo-lite/geoip/cloudflare.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/cloudflare.srs"
       },
       {
         "type": "remote",
         "tag": "cloudfront-ip",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo-lite/geoip/cloudfront.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/cloudfront.srs"
       },
       {
         "type": "remote",
         "tag": "apple-ip",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo-lite/geoip/apple.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/apple.srs"
       },
       {
         "type": "remote",
         "tag": "google-ip",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo-lite/geoip/google.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/google.srs"
       },
       {
         "type": "remote",
         "tag": "cn-ip",
-        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo-lite/geoip/cn.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/cn.srs"
       }
     ],
     "auto_detect_interface": true,
-    "default_domain_resolver": "dns-local"
+    "default_domain_resolver": "aliyun"
   },
   "experimental": {
     "cache_file": {

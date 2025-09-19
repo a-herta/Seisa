@@ -23,8 +23,8 @@ cleanup() {
   log_safe "🧹 清理残留服务进程..."
 
   if [ -x "$START_RULES" ]; then
-    log_safe "🔥 清理防火墙规则..."
-    $START_RULES stop >/dev/null 2>&1 || log_safe "❌ 规则脚本调用失败"
+    log_safe "🔥 调用防火墙规则清理..."
+    sh "$START_RULES" stop >/dev/null 2>&1 || log_safe "❌ 防火墙规则清理失败"
   fi
 
   if [ -f "$PIDFILE" ]; then
@@ -67,7 +67,7 @@ ensure_bin() {
   # 如果核心不存在, 必须执行更新
   if [ ! -x "$BIN_PATH" ]; then
     log_safe "❗ 代理核心不存在, 尝试自动下载..."
-    "$MODDIR"/$update "$bin_repo" "$release_tag" >/dev/null 2>&1 || log_safe "❌ 自动更新执行失败"
+    sh "$MODDIR/$update" "$bin_repo" "$release_tag" >/dev/null 2>&1 || log_safe "❌ 自动更新执行失败"
     if [ ! -x "$BIN_PATH" ]; then
       log_safe "❌ 下载代理核心出错"
       return 1
@@ -91,8 +91,8 @@ ensure_bin() {
 
     # 3. 比较版本 (简单的字符串比较)
     if [ "$latest_tag" != "$current_ver" ] && [ "$latest_tag" != "0.0.0" ]; then
-      log_safe "✨ 发现新版本, 开始更新..."
-      "$MODDIR"/$update "$bin_repo" >/dev/null 2>&1 || log_safe "❌ 自动更新执行失败"
+      log_safe "💡 发现新版本, 开始更新..."
+      sh "$MODDIR/$update" "$bin_repo" >/dev/null 2>&1 || log_safe "❌ 自动更新执行失败"
     else
       log_safe "✅ 当前已是最新版本, 无需更新"
     fi
@@ -160,13 +160,13 @@ start_bin() {
 # 应用防火墙规则, 以便将流量转发给核心进程
 apply_rules() {
   if [ -x "$START_RULES" ]; then
-    log_safe "🔥 正在应用防火墙规则..."
-    $START_RULES start >/dev/null 2>&1 || {
-      log_safe "❌ 规则脚本调用失败"
+    log_safe "🔥 正在调用防火墙规则..."
+    sh "$START_RULES" start >/dev/null 2>&1 || {
+      log_safe "❌ 防火墙规则调用失败"
       return 1
     }
   else
-    log_safe "❌ 规则脚本未找到, 请重新安装模块"
+    log_safe "❌ 防火墙规则未找到, 请重新安装模块"
     return 1
   fi
 }
@@ -202,9 +202,7 @@ case "$1" in
     log_safe "🛑 服务停止中..."
     cleanup
     rm -f "$FLAG" 2>/dev/null || true
-    update_desc
     log_safe "✅ 服务已停止"
-    exit 0
     ;;
   *)
     log_safe "🚀 服务启动中..."
@@ -225,9 +223,10 @@ case "$1" in
     start_monitor_if_needed
     # 7. 创建服务运行标识
     touch "$FLAG" 2>/dev/null || true
-    update_desc
     log_safe "✅ 服务启动完成"
     ;;
 esac
+
+update_desc
 
 exit 0

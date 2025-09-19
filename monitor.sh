@@ -60,7 +60,7 @@ while true; do
   # 执行重启
   log_safe "🚀 核心未运行, 尝试重启"
 
-  $SERVICE >/dev/null 2>&1 || abort_safe "❌ 服务 $(basename "$SERVICE") 重启失败"
+  sh "$SERVICE" >/dev/null 2>&1 || abort_safe "❌ 服务 $(basename "$SERVICE") 重启失败"
 
   "$(date +%s)" >> "$RESTARTS_FILE"
   sleep 2

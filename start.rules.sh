@@ -19,7 +19,6 @@ TABLE_ID=${TABLE_ID:-"2024"}
 CHAIN_NAME=${CHAIN_NAME:-FIREFLY}
 CHAIN_PRE=${CHAIN_PRE:-"${CHAIN_NAME}_PRE"}
 CHAIN_OUT=${CHAIN_OUT:-"${CHAIN_NAME}_OUT"}
-CHAIN_LAN=${CHAIN_LAN:-"${CHAIN_NAME}_LAN"}
 
 log_safe "❤️ === [start.rules] === ❤️"
 
@@ -68,24 +67,30 @@ setup_routes() {
 unset_routes() {
   log_safe "🗺️ 正在清除策略路由..."
 
+  ip rule del fwmark "$MARK_ID" lookup "$TABLE_ID" pref "$TABLE_ID" 2>/dev/null || true
+  ip route flush table "$TABLE_ID" 2>/dev/null || true
+
   if [ "$IPV6_SUPPORT" = "1" ]; then
     ip -6 rule del fwmark "$MARK_ID" lookup "$TABLE_ID" pref "$TABLE_ID" 2>/dev/null || true
     ip -6 route flush table "$TABLE_ID" 2>/dev/null || true
   fi
-
-  ip rule del fwmark "$MARK_ID" lookup "$TABLE_ID" pref "$TABLE_ID" 2>/dev/null || true
-  ip route flush table "$TABLE_ID" 2>/dev/null || true
 }
 
 # --- tproxy 规则函数 ---
 add_tproxy_rules() {
   ip_cmd=${1:-iptables}
 
-  log_safe "🚦 正在添加 $ip_cmd 规则..."
+  if [ "$ip_cmd" = "iptables" ]; then
+    fire=$FAIR4
+    local_ip="127.0.0.1"
+    lan_ips=$INTRANET
+  else
+    fire=$FAIR6
+    local_ip="::1"
+    lan_ips=$INTRANET6
+  fi
 
-  log_safe "🔗 创建自定义 LAN 链..."
-  $ip_cmd -w 100 -t mangle -N "$CHAIN_LAN" 2>/dev/null || true
-  $ip_cmd -w 100 -t mangle -F "$CHAIN_LAN" 2>/dev/null || true
+  log_safe "🚦 正在添加 $ip_cmd 规则..."
 
   log_safe "🔗 创建自定义 PREROUTING 链..."
   $ip_cmd -w 100 -t mangle -N "$CHAIN_PRE" 2>/dev/null || true
@@ -108,15 +113,9 @@ add_tproxy_rules() {
   fi
 
   log_safe "🏠 放行内网 IP 流量..."
-  if [ "$ip_cmd" = "iptables" ]; then
-    for ip in $INTRANET; do
-      $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -d "$ip" -j RETURN
-    done
-  else
-    for ip in $INTRANET6; do
-      $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -d "$ip" -j RETURN
-    done
-  fi
+  for ip in $lan_ips; do
+    $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -d "$ip" -j RETURN
+  done
 
   log_safe "♻️ 重定向 lo 回环流量..."
   $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -i lo -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
@@ -131,28 +130,17 @@ add_tproxy_rules() {
   fi
 
   log_safe "🎟️ 应用至 PREROUTING 链..."
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -j "$CHAIN_LAN"
   $ip_cmd -w 100 -t mangle -I PREROUTING -j "$CHAIN_PRE"
 
   log_safe "🔗 创建自定义 OUTPUT 链..."
   $ip_cmd -w 100 -t mangle -N "$CHAIN_OUT" 2>/dev/null || true
   $ip_cmd -w 100 -t mangle -F "$CHAIN_OUT" 2>/dev/null || true
 
-  if [ -n "$TPROXY_USER" ]; then
-    log_safe "👤 放行 $TPROXY_USER($USER_ID:$GROUP_ID) 本身流量..."
-    $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" -j RETURN
-  fi
+  log_safe "👤 放行 $TPROXY_USER($USER_ID:$GROUP_ID) 本身流量..."
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" -j RETURN
 
-  log_safe "🔒 放行 DoT/DoQ DNS 查询流量 (端口 853)..."
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp --dport 853 -j RETURN
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p tcp --dport 853 -j RETURN
-
-  log_safe "👻 强制代理 FakeIP 流量..."
-  if [ "$ip_cmd" = "iptables" ] && [ -n "$FAIR4" ]; then
-    $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -d "$FAIR4" -j MARK --set-xmark "$MARK_ID"
-  elif [ "$ip_cmd" = "ip6tables" ] && [ -n "$FAIR6" ]; then
-    $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -d "$FAIR6" -j MARK --set-xmark "$MARK_ID"
-  fi
+  log_safe "👻 重定向 FakeIP($fire) 流量..."
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -d "$fire" -j MARK --set-xmark "$MARK_ID"
 
   if [ "$IGNORE_LIST" != "" ]; then
     log_safe "🚫 放行忽略列表接口流量..."
@@ -171,38 +159,18 @@ add_tproxy_rules() {
   fi
 
   log_safe "🏠 放行内网 IP 流量..."
-  if [ "$ip_cmd" = "iptables" ]; then
-    for ip in $INTRANET; do
-      $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -d "$ip" -j RETURN
-    done
-  else
-    for ip in $INTRANET6; do
-      $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -d "$ip" -j RETURN
-    done
-  fi
+  for ip in $lan_ips; do
+    $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -d "$ip" -j RETURN
+  done
 
   log_safe "💼 放行/重定向应用流量"
   add_app_rules "$ip_cmd"
 
   log_safe "🎟️ 应用至 OUTPUT 链..."
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -j "$CHAIN_LAN"
   $ip_cmd -w 100 -t mangle -I OUTPUT -j "$CHAIN_OUT"
 
-  log_safe "🔗 创建及应用 DIVERT 链..."
-  $ip_cmd -w 100 -t mangle -N DIVERT 2>/dev/null || true
-  $ip_cmd -w 100 -t mangle -F DIVERT 2>/dev/null || true
-  $ip_cmd -w 100 -t mangle -A DIVERT -j MARK --set-xmark "$MARK_ID"
-  $ip_cmd -w 100 -t mangle -A DIVERT -j ACCEPT
-  $ip_cmd -w 100 -t mangle -I PREROUTING -p tcp -m socket -j DIVERT
-
-  if [ -n "$TPROXY_USER" ]; then
-    log_safe "👤 阻止本地服务访问 tproxy 端口..."
-    if [ "$ip_cmd" = "iptables" ]; then
-      $ip_cmd -w 100 -A OUTPUT -d 127.0.0.1 -p tcp -m owner --uid-owner "$USER_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT
-    else
-      $ip_cmd -w 100 -A OUTPUT -d ::1 -p tcp -m owner --uid-owner "$USER_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT
-    fi
-  fi
+  log_safe "👤 阻止本地服务访问 tproxy 端口..."
+  $ip_cmd -w 100 -A OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT
 
   if $ip_cmd -t nat -nL >/dev/null 2>&1; then
     if [ "$BIN_NAME" = "mihomo" ] || [ "$BIN_NAME" = "hysteria" ] || [ "$BIN_NAME" = "clash" ]; then
@@ -221,14 +189,8 @@ add_tproxy_rules() {
     fi
 
     log_safe "👻 修复 FakeIP ICMP..."
-
-    if [ "$ip_cmd" = "iptables" ]; then
-      $ip_cmd -w 100 -t nat -A OUTPUT -d "$FAIR4" -p icmp -j DNAT --to-destination 127.0.0.1
-      $ip_cmd -w 100 -t nat -A PREROUTING -d "$FAIR4" -p icmp -j DNAT --to-destination 127.0.0.1
-    else
-      $ip_cmd -w 100 -t nat -A OUTPUT -d "$FAIR6" -p icmp -j DNAT --to-destination ::1
-      $ip_cmd -w 100 -t nat -A PREROUTING -d "$FAIR6" -p icmp -j DNAT --to-destination ::1
-    fi
+    $ip_cmd -w 100 -t nat -A OUTPUT -d "$fire" -p icmp -j DNAT --to-destination "$local_ip"
+    $ip_cmd -w 100 -t nat -A PREROUTING -d "$fire" -p icmp -j DNAT --to-destination "$local_ip"
   else
     log_safe "❗ $ip_cmd 不支持 NAT 表, 跳过"
   fi
@@ -310,15 +272,19 @@ add_whitelist_rules() {
 remove_tproxy_rules() {
   ip_cmd=${1:-iptables}
 
+  if [ "$ip_cmd" = "iptables" ]; then
+    fire=$FAIR4
+    local_ip="127.0.0.1"
+  else
+    fire=$FAIR6
+    local_ip="::1"
+  fi
+
   log_safe "🧹 正在删除 $ip_cmd 规则..."
 
   $ip_cmd -w 100 -t mangle -D OUTPUT -j "$CHAIN_OUT" 2>/dev/null || true
 
-  $ip_cmd -w 100 -t mangle -D PREROUTING -p tcp -m socket -j DIVERT 2>/dev/null || true
   $ip_cmd -w 100 -t mangle -D PREROUTING -j "$CHAIN_PRE" 2>/dev/null || true
-
-  $ip_cmd -w 100 -t mangle -F DIVERT 2>/dev/null || true
-  $ip_cmd -w 100 -t mangle -X DIVERT 2>/dev/null || true
 
   $ip_cmd -w 100 -t mangle -F "$CHAIN_OUT" 2>/dev/null || true
   $ip_cmd -w 100 -t mangle -X "$CHAIN_OUT" 2>/dev/null || true
@@ -326,18 +292,8 @@ remove_tproxy_rules() {
   $ip_cmd -w 100 -t mangle -F "$CHAIN_PRE" 2>/dev/null || true
   $ip_cmd -w 100 -t mangle -X "$CHAIN_PRE" 2>/dev/null || true
 
-  $ip_cmd -w 100 -t mangle -F "$CHAIN_LAN" 2>/dev/null || true
-  $ip_cmd -w 100 -t mangle -X "$CHAIN_LAN" 2>/dev/null || true
-
-  if [ -n "$TPROXY_USER" ]; then
-    if [ "$ip_cmd" = "iptables" ]; then
-      $ip_cmd -w 100 -D OUTPUT -d 127.0.0.1 -p tcp -m owner --uid-owner "$USER_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT
-      $ip_cmd -w 100 -D OUTPUT -d 127.0.0.1 -p tcp -m owner --uid-owner 0 -m tcp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || true
-    else
-      $ip_cmd -w 100 -D OUTPUT -d ::1 -p tcp -m owner --uid-owner "$USER_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT
-      $ip_cmd -w 100 -D OUTPUT -d ::1 -p tcp -m owner --uid-owner 0 -m tcp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || true
-    fi
-  fi
+  $ip_cmd -w 100 -D OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT
+  $ip_cmd -w 100 -D OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner 0 -m tcp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || true
 
   if $ip_cmd -t nat -nL >/dev/null 2>&1; then
     $ip_cmd -w 100 -t nat -D OUTPUT -j CLASH_DNS_OUT 2>/dev/null || true
@@ -349,13 +305,8 @@ remove_tproxy_rules() {
     $ip_cmd -w 100 -t nat -F CLASH_DNS_PRE 2>/dev/null || true
     $ip_cmd -w 100 -t nat -X CLASH_DNS_PRE 2>/dev/null || true
 
-    if [ "$ip_cmd" = "iptables" ]; then
-      $ip_cmd -w 100 -t nat -D OUTPUT -d "$FAIR4" -p icmp -j DNAT --to-destination 127.0.0.1
-      $ip_cmd -w 100 -t nat -D PREROUTING -d "$FAIR4" -p icmp -j DNAT --to-destination 127.0.0.1
-    else
-      $ip_cmd -w 100 -t nat -D OUTPUT -d "$FAIR6" -p icmp -j DNAT --to-destination ::1
-      $ip_cmd -w 100 -t nat -D PREROUTING -d "$FAIR6" -p icmp -j DNAT --to-destination ::1
-    fi
+    $ip_cmd -w 100 -t nat -D OUTPUT -d "$fire" -p icmp -j DNAT --to-destination "$local_ip"
+    $ip_cmd -w 100 -t nat -D PREROUTING -d "$fire" -p icmp -j DNAT --to-destination "$local_ip"
   fi
 }
 
