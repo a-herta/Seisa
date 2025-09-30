@@ -13,7 +13,7 @@ MODDIR=$(dirname "$0")
 . "$MODDIR/common.sh"
 
 # --- 全局默认变量 ------------------------------------------------------------
-MARK_ID=${MARK_ID:-"16777216/16777216"}
+MARK_HEX=${MARK_HEX:-"0x1000000"}
 TABLE_ID=${TABLE_ID:-"2024"}
 CHAIN_NAME=${CHAIN_NAME:-"FIREFLY"}
 CHAIN_PRE=${CHAIN_PRE:-"${CHAIN_NAME}_PRE"}
@@ -69,22 +69,22 @@ setup_routes() {
   sysctl -w net.ipv4.ip_forward=1 2>/dev/null || true
   ip route add local default dev lo table "$TABLE_ID" 2>/dev/null || true
   # 删除可能存在的同名规则，避免重复添加
-  ip rule  del fwmark "$MARK_ID" lookup "$TABLE_ID" pref "$TABLE_ID" 2>/dev/null || true
-  ip rule  add fwmark "$MARK_ID" lookup "$TABLE_ID" pref "$TABLE_ID" 2>/dev/null || true
+  ip rule  del fwmark "$MARK_HEX" lookup "$TABLE_ID" 2>/dev/null || true
+  ip rule  add fwmark "$MARK_HEX" lookup "$TABLE_ID" 2>/dev/null || true
   if [ "$IPV6_SUPPORT" = "1" ]; then
     sysctl -w net.ipv6.conf.all.forwarding=1 2>/dev/null || true
     ip -6 route add local default dev lo table "$TABLE_ID" 2>/dev/null || true
-    ip -6 rule  del fwmark "$MARK_ID" lookup "$TABLE_ID" pref "$TABLE_ID" 2>/dev/null || true
-    ip -6 rule  add fwmark "$MARK_ID" lookup "$TABLE_ID" pref "$TABLE_ID" 2>/dev/null || true
+    ip -6 rule  del fwmark "$MARK_HEX" lookup "$TABLE_ID" 2>/dev/null || true
+    ip -6 rule  add fwmark "$MARK_HEX" lookup "$TABLE_ID" 2>/dev/null || true
   fi
 }
 
 unset_routes() {
   log_safe "🗺️ 正在清除策略路由..."
-  ip rule  del fwmark "$MARK_ID" lookup "$TABLE_ID" pref "$TABLE_ID" 2>/dev/null || true
+  ip rule  del fwmark "$MARK_HEX" lookup "$TABLE_ID" 2>/dev/null || true
   ip route flush table "$TABLE_ID" 2>/dev/null || true
   if [ "$IPV6_SUPPORT" = "1" ]; then
-    ip -6 rule  del fwmark "$MARK_ID" lookup "$TABLE_ID" pref "$TABLE_ID" 2>/dev/null || true
+    ip -6 rule  del fwmark "$MARK_HEX" lookup "$TABLE_ID" 2>/dev/null || true
     ip -6 route flush table "$TABLE_ID" 2>/dev/null || true
   fi
 }
@@ -117,8 +117,8 @@ add_app_rules() {
 
 add_global_proxy_rules() {
   ip_cmd="${1:-iptables}"
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -j MARK --set-xmark "$MARK_ID"
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp -j MARK --set-xmark "$MARK_ID"
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -j MARK --set-xmark "$MARK_HEX"
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp -j MARK --set-xmark "$MARK_HEX"
 }
 
 add_blacklist_rules() {
@@ -147,17 +147,17 @@ add_whitelist_rules() {
     uid=$(dumpsys package "$app_pkg" 2>/dev/null | grep 'userId=' | cut -d'=' -f2)
     if [ -n "$uid" ]; then
       log_safe "⚪ 应用 '$app_pkg' ($uid) 已加入白名单"
-      $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -m owner --uid-owner "$uid" -j MARK --set-xmark "$MARK_ID"
-      $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp -m owner --uid-owner "$uid" -j MARK --set-xmark "$MARK_ID"
+      $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -m owner --uid-owner "$uid" -j MARK --set-xmark "$MARK_HEX"
+      $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp -m owner --uid-owner "$uid" -j MARK --set-xmark "$MARK_HEX"
     else
       log_safe "❗ 应用 '$app_pkg' UID 解析失败"
     fi
   done
   # 系统关键 UID 可按需补充（示例保留）
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -m owner --uid-owner 0    -j MARK --set-xmark "$MARK_ID"
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp -m owner --uid-owner 0    -j MARK --set-xmark "$MARK_ID"
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -m owner --uid-owner 1052 -j MARK --set-xmark "$MARK_ID"
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp -m owner --uid-owner 1052 -j MARK --set-xmark "$MARK_ID"
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -m owner --uid-owner 0    -j MARK --set-xmark "$MARK_HEX"
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp -m owner --uid-owner 0    -j MARK --set-xmark "$MARK_HEX"
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -m owner --uid-owner 1052 -j MARK --set-xmark "$MARK_HEX"
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp -m owner --uid-owner 1052 -j MARK --set-xmark "$MARK_HEX"
 }
 
 # --- TProxy 规则主体 ----------------------------------------------------------
@@ -182,28 +182,28 @@ add_tproxy_rules() {
     $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp --dport 53 -j RETURN
   else
     log_safe "🚥 $CHAIN_PRE 重定向 53 端口(DNS)..."
-    $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp --dport 53 -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
-    $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp --dport 53 -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
+    $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp --dport 53 -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
+    $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp --dport 53 -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
   fi
 
   log_safe "🔌 $CHAIN_PRE 标记透明代理接管..."
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -m socket --transparent -j MARK --set-xmark "$MARK_ID"
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp -m socket --transparent -j MARK --set-xmark "$MARK_ID"
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -m socket -j RETURN
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -m socket --transparent -j MARK --set-xmark "$MARK_HEX"
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp -m socket --transparent -j MARK --set-xmark "$MARK_HEX"
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" ! -i lo -m socket -j RETURN
 
   for ip in $lan_ips; do
     log_safe "🚦 $CHAIN_PRE 放行内网($ip)..."
     $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -d "$ip" -j RETURN
   done
 
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -i lo -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp -i lo -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -i lo -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp -i lo -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
 
   if [ -n "$IFACES_LIST" ]; then
     for iface in $IFACES_LIST; do
       log_safe "📡 $CHAIN_PRE 重定向来宾接口($iface)..."
-      $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -i "$iface" -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
-      $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp -i "$iface" -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
+      $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -i "$iface" -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
+      $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp -i "$iface" -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
     done
   fi
 
@@ -216,7 +216,7 @@ add_tproxy_rules() {
   $ip_cmd -w 100 -t mangle -F "$CHAIN_OUT" 2>/dev/null || true
 
   log_safe "👤 $CHAIN_OUT 放行 $TPROXY_USER($USER_ID:$GROUP_ID)..."
-  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -j RETURN
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" -j RETURN
 
   if [ -n "$IGNORE_LIST" ]; then
     for ignore in $IGNORE_LIST; do
@@ -231,8 +231,8 @@ add_tproxy_rules() {
     $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp --dport 53 -j RETURN
   else
     log_safe "🚥 $CHAIN_OUT 重定向 53 端口(DNS)..."
-    $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p tcp --dport 53 -j MARK --set-xmark "$MARK_ID"
-    $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp --dport 53 -j MARK --set-xmark "$MARK_ID"
+    $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p tcp --dport 53 -j MARK --set-xmark "$MARK_HEX"
+    $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp --dport 53 -j MARK --set-xmark "$MARK_HEX"
   fi
 
   for ip in $lan_ips; do
@@ -249,10 +249,10 @@ add_tproxy_rules() {
 
   # [OPT] 自吃保护(含 UDP)：阻止本地服务访问 TPROXY 端口，防环
   log_safe "🛡️ 阻止本地服务访问 tproxy 端口..."
-  $ip_cmd -w 100 -C OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || \
-  $ip_cmd -w 100 -A OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT
-  $ip_cmd -w 100 -C OUTPUT -d "$local_ip" -p udp -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -m udp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || \
-  $ip_cmd -w 100 -A OUTPUT -d "$local_ip" -p udp -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -m udp --dport "$TPROXY_PORT" -j REJECT
+  $ip_cmd -w 100 -C OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || \
+  $ip_cmd -w 100 -A OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT
+  $ip_cmd -w 100 -C OUTPUT -d "$local_ip" -p udp -m owner --uid-owner "$USER_ID" -m udp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || \
+  $ip_cmd -w 100 -A OUTPUT -d "$local_ip" -p udp -m owner --uid-owner "$USER_ID" -m udp --dport "$TPROXY_PORT" -j REJECT
 
   # Clash 全局 DNS 模式（仅当 nat 可用）
   if $ip_cmd -t nat -nL >/dev/null 2>&1; then
@@ -266,7 +266,7 @@ add_tproxy_rules() {
 
       $ip_cmd -w 100 -t nat -N CLASH_DNS_OUT 2>/dev/null || true
       $ip_cmd -w 100 -t nat -F CLASH_DNS_OUT 2>/dev/null || true
-      $ip_cmd -w 100 -t nat -A CLASH_DNS_OUT -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -j RETURN
+      $ip_cmd -w 100 -t nat -A CLASH_DNS_OUT -m owner --uid-owner "$USER_ID" -j RETURN
       $ip_cmd -w 100 -t nat -A CLASH_DNS_OUT -p udp --dport 53 -j REDIRECT --to-ports "$CLASH_DNS_PORT"
       $ip_cmd -w 100 -t nat -C OUTPUT -j CLASH_DNS_OUT 2>/dev/null || \
       $ip_cmd -w 100 -t nat -I OUTPUT -j CLASH_DNS_OUT
@@ -301,8 +301,8 @@ remove_tproxy_rules() {
   $ip_cmd -w 100 -t mangle -F "$CHAIN_PRE" 2>/dev/null || true
   $ip_cmd -w 100 -t mangle -X "$CHAIN_PRE" 2>/dev/null || true
 
-  $ip_cmd -w 100 -D OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || true
-  $ip_cmd -w 100 -D OUTPUT -d "$local_ip" -p udp -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -m udp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || true
+  $ip_cmd -w 100 -D OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || true
+  $ip_cmd -w 100 -D OUTPUT -d "$local_ip" -p udp -m owner --uid-owner "$USER_ID" -m udp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || true
 
   if $ip_cmd -t nat -nL >/dev/null 2>&1; then
     if [ "$BIN_NAME" = "mihomo" ] || [ "$BIN_NAME" = "hysteria" ] || [ "$BIN_NAME" = "clash" ]; then
