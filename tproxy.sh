@@ -34,6 +34,7 @@ IPV6_SUPPORT=${IPV6_SUPPORT:-0}
 if [ "$(read_setting "IPV6" "0")" = "1" ] && ip -6 route show >/dev/null 2>&1; then
   IPV6_SUPPORT=1
 fi
+CLASH_DNS_PORT=${CLASH_DNS_PORT:-"1053"}
 
 log_safe "❤️ === [tproxy] ==="
 
@@ -46,7 +47,7 @@ detect_tproxy_params() {
   if [ -f "$BIN_CONF" ]; then
     fair4="$(grep -m1 '"inet4_range"' "$BIN_CONF" | cut -d'"' -f4 || true)"
     fair6="$(grep -m1 '"inet6_range"' "$BIN_CONF" | cut -d'"' -f4 || true)"
-    t_port="$(awk '/"type": "tproxy"/,/\}/' "$BIN_CONF" | grep -m1 '"listen_port"' | grep -o '[0-9]\+' || true)"
+    t_port="$(grep -A 5 '"type": "tproxy"' "$BIN_CONF" | grep -m1 '"listen_port"' | grep -o '[0-9]\+' || true)"
   fi
   if [ -n "$fair4" ]; then
     log_safe "🕹️ 检测到 FakeIP 网段: $fair4"
@@ -88,80 +89,48 @@ unset_routes() {
   fi
 }
 
-# --- 通用“早期放行/降噪”规则（PREROUTING/OUTPUT） -----------------------------
-add_common_bypass_rules() {
-  ip_cmd="${1:-iptables}"
-  chain="${2:-$CHAIN_PRE}"
-
-  if [ "$ip_cmd" = "iptables" ]; then
-    local_ip="127.0.0.1"; lan_ips=$INTRANET
-  else
-    local_ip="::1";       lan_ips=$INTRANET6
-  fi
-
-  # Determine whether to match input (-i) or output (-o) interface.
-  # PREROUTING typically matches incoming interface (-i), OUTPUT should use (-o).
-  if [ "$chain" = "$CHAIN_PRE" ]; then
-    iface_flag="-i"
-  else
-    iface_flag="-o"
-  fi
-
-  # [OPT] 先行 RETURN 噪声/回环，避免进入 TProxy 与刷日志
-  # 回环（在 PREROUTING 用 -i lo，在 OUTPUT 用 -o lo）
-  $ip_cmd -w 100 -t mangle -A "$chain" $iface_flag lo -j RETURN
-
-  if [ "$ip_cmd" = "iptables" ]; then
-    # 局域网发现端口
-    $ip_cmd -w 100 -t mangle -A "$chain" -p udp --dport 1900 -j RETURN   # SSDP
-    $ip_cmd -w 100 -t mangle -A "$chain" -p udp --dport 67:68 -j RETURN  # DHCP
-    $ip_cmd -w 100 -t mangle -A "$chain" -p udp --dport 137:139 -j RETURN # NetBIOS/SMB发现
-  fi
-
-  $ip_cmd -w 100 -t mangle -A "$chain" -p udp --dport 5353 -j RETURN   # mDNS
-  $ip_cmd -w 100 -t mangle -A "$chain" -p udp --dport 5355 -j RETURN   # LLMNR
-
-  # 放行内网目的地址（含多播/链路本地等保留段）
-  for ip in $lan_ips; do
-    $ip_cmd -w 100 -t mangle -A "$chain" -d "$ip" -j RETURN
-  done
-}
-
 # --- 应用级分流规则（保持你原逻辑） -------------------------------------------
 add_app_rules() {
   ip_cmd="${1:-iptables}"
 
   if ! command -v dumpsys >/dev/null 2>&1; then
-    log_safe "❗ dumpsys 不可用, 回退为全局代理"
+    log_safe "❗ dumpsys 不可用, 回退全局代理模式..."
     add_global_proxy_rules "$ip_cmd"
     return
   fi
 
   case "$PROXY_MODE" in
-    whitelist) add_whitelist_rules "$ip_cmd" ;;
-    blacklist) add_blacklist_rules "$ip_cmd" ;;
-    *)         add_global_proxy_rules "$ip_cmd" ;;
+    whitelist)
+      log_safe "📱 应用白名单代理模式..."
+      add_whitelist_rules "$ip_cmd"
+      ;;
+    blacklist)
+      log_safe "📱 应用黑名单代理模式..."
+      add_blacklist_rules "$ip_cmd"
+      ;;
+    *)
+      log_safe "🔥 应用全局代理模式..."
+      add_global_proxy_rules "$ip_cmd"
+      ;;
   esac
 }
 
 add_global_proxy_rules() {
   ip_cmd="${1:-iptables}"
-  log_safe "🔥 应用全局代理模式..."
   $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -j MARK --set-xmark "$MARK_ID"
   $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp -j MARK --set-xmark "$MARK_ID"
 }
 
 add_blacklist_rules() {
   ip_cmd="${1:-iptables}"
-  log_safe "📱 应用黑名单代理模式..."
   if [ -n "$APP_PACKAGES" ]; then
     for app_pkg in $APP_PACKAGES; do
       uid=$(dumpsys package "$app_pkg" 2>/dev/null | grep 'userId=' | cut -d'=' -f2)
       if [ -n "$uid" ]; then
-        log_safe "⚫ 应用 '$app_pkg' (UID: $uid) 加入黑名单（不代理）"
+        log_safe "⚫ 应用 '$app_pkg' ($uid) 已加入黑名单"
         $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$uid" -j RETURN
       else
-        log_safe "❗ [警告] 找不到 '$app_pkg' 的 UID"
+        log_safe "❗ 应用 '$app_pkg' UID 解析失败"
       fi
     done
   fi
@@ -170,19 +139,18 @@ add_blacklist_rules() {
 
 add_whitelist_rules() {
   ip_cmd="${1:-iptables}"
-  log_safe "📱 应用白名单代理模式..."
   if [ -z "$APP_PACKAGES" ]; then
-    log_safe "❗ 白名单为空，除 DNS 外本机流量将不经代理"
+    log_safe "❗ 白名单为空, 除 DNS 外本机流量将不经代理"
     return
   fi
   for app_pkg in $APP_PACKAGES; do
     uid=$(dumpsys package "$app_pkg" 2>/dev/null | grep 'userId=' | cut -d'=' -f2)
     if [ -n "$uid" ]; then
-      log_safe "⚪ 应用 '$app_pkg' (UID: $uid) 加入白名单（代理）"
+      log_safe "⚪ 应用 '$app_pkg' ($uid) 已加入白名单"
       $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -m owner --uid-owner "$uid" -j MARK --set-xmark "$MARK_ID"
       $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp -m owner --uid-owner "$uid" -j MARK --set-xmark "$MARK_ID"
     else
-      log_safe "❌ [警告] 找不到 '$app_pkg' 的 UID"
+      log_safe "❗ 应用 '$app_pkg' UID 解析失败"
     fi
   done
   # 系统关键 UID 可按需补充（示例保留）
@@ -202,142 +170,115 @@ add_tproxy_rules() {
     fire="$FAIR6"; local_ip="::1";       lan_ips="$INTRANET6"
   fi
 
-  log_safe "🚦 正在添加 $ip_cmd 规则..."
+  log_safe "🎫 正在添加 $ip_cmd 规则..."
 
-  # Simple detection: ensure the iptables binary supports the TPROXY target before using it.
-  tproxy_supported=1
-  if ! $ip_cmd -t mangle -j TPROXY -h >/dev/null 2>&1; then
-    tproxy_supported=0
-    log_safe "❗ $ip_cmd 不支持 TPROXY 目标, 相关 TPROXY 规则将被跳过"
-  fi
-
-  # 自定义 PREROUTING 链
   log_safe "🔗 创建自定义 PREROUTING 链..."
   $ip_cmd -w 100 -t mangle -N "$CHAIN_PRE" 2>/dev/null || true
   $ip_cmd -w 100 -t mangle -F "$CHAIN_PRE" 2>/dev/null || true
 
-  # [OPT] 早期放行/降噪（多播/广播/回环/内网/发现端口）
-  add_common_bypass_rules "$ip_cmd" "$CHAIN_PRE"
-
-  # 标记「由透明 socket 接管」的流量（仅在支持 TPROXY 时添加）
-  if [ "$tproxy_supported" -eq 1 ]; then
-    log_safe "🔌 标记透明代理接管流量..."
-    $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -m socket --transparent -j MARK --set-xmark "$MARK_ID"
-    $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp -m socket --transparent -j MARK --set-xmark "$MARK_ID"
-  else
-    log_safe "❗ 跳过透明 socket 标记；设备可能不支持 TPROXY 或内核未启用相关模块"
-  fi
-
-  # DNS：Clash/Mihomo/Hysteria 走自带，全局 else 走 TPROXY
-  log_safe "🏳️‍🌈 放行/重定向 DNS 流量..."
   if [ "$BIN_NAME" = "mihomo" ] || [ "$BIN_NAME" = "hysteria" ] || [ "$BIN_NAME" = "clash" ]; then
+    log_safe "🚦 $CHAIN_PRE 放行 53 端口(DNS)..."
     $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp --dport 53 -j RETURN
     $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp --dport 53 -j RETURN
   else
-    if [ "$tproxy_supported" -eq 1 ]; then
-      $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp --dport 53 -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
-      $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp --dport 53 -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
-    else
-      # 回退：仅标记 DNS（不能真正 TPROXY 到进程）以供策略路由使用
-      $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp --dport 53 -j MARK --set-xmark "$MARK_ID"
-      $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp --dport 53 -j MARK --set-xmark "$MARK_ID"
-      log_safe "❗ 使用 MARK 代替 TPROXY 来处理 DNS（功能可能受限）"
-    fi
+    log_safe "🚥 $CHAIN_PRE 重定向 53 端口(DNS)..."
+    $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp --dport 53 -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
+    $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp --dport 53 -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
   fi
 
-  # [OPT] 来宾接口接管（如开启热点）
+  log_safe "🔌 $CHAIN_PRE 标记透明代理接管..."
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -m socket --transparent -j MARK --set-xmark "$MARK_ID"
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp -m socket --transparent -j MARK --set-xmark "$MARK_ID"
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -m socket -j RETURN
+
+  for ip in $lan_ips; do
+    log_safe "🚦 $CHAIN_PRE 放行内网($ip)..."
+    $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -d "$ip" -j RETURN
+  done
+
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -i lo -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
+  $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp -i lo -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
+
   if [ -n "$IFACES_LIST" ]; then
-    for ap in $IFACES_LIST; do
-      log_safe "📡 重定向来宾接口 ($ap) 流量..."
-      if [ "$tproxy_supported" -eq 1 ]; then
-        $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -i "$ap" -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
-        $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp -i "$ap" -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
-      else
-        # 回退：对来宾接口做 MARK（功能受限，仅作兼容）
-        $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -i "$ap" -j MARK --set-xmark "$MARK_ID"
-        $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp -i "$ap" -j MARK --set-xmark "$MARK_ID"
-      fi
+    for iface in $IFACES_LIST; do
+      log_safe "📡 $CHAIN_PRE 重定向来宾接口($iface)..."
+      $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -i "$iface" -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
+      $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp -i "$iface" -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
     done
   fi
-  # 挂接到 PREROUTING
-  log_safe "🏁 应用至 PREROUTING..."
+
+  log_safe "🏁 $CHAIN_PRE 应用至 PREROUTING..."
   $ip_cmd -w 100 -t mangle -C PREROUTING -j "$CHAIN_PRE" 2>/dev/null || \
   $ip_cmd -w 100 -t mangle -I PREROUTING -j "$CHAIN_PRE"
 
-  # 自定义 OUTPUT 链
   log_safe "🔗 创建自定义 OUTPUT 链..."
   $ip_cmd -w 100 -t mangle -N "$CHAIN_OUT" 2>/dev/null || true
   $ip_cmd -w 100 -t mangle -F "$CHAIN_OUT" 2>/dev/null || true
 
-  log_safe "👤 放行 $TPROXY_USER($USER_ID:$GROUP_ID) 本身流量..."
+  log_safe "👤 $CHAIN_OUT 放行 $TPROXY_USER($USER_ID:$GROUP_ID)..."
   $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -j RETURN
 
-  # [OPT] 输出侧早期放行/降噪（回环/多播/发现端口/内网）
-  add_common_bypass_rules "$ip_cmd" "$CHAIN_OUT"
-
-  # [OPT] 忽略特定出口接口
   if [ -n "$IGNORE_LIST" ]; then
-    log_safe "🙈 放行忽略列表出口接口流量..."
-    for dev in $IGNORE_LIST; do
-      $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -o "$dev" -j RETURN
+    for ignore in $IGNORE_LIST; do
+      log_safe "🙈 $CHAIN_OUT 放行忽略列表接口($ignore)..."
+      $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -o "$ignore" -j RETURN
     done
   fi
 
-  # DNS（与 PREROUTING 一致）
-  log_safe "🏳️‍🌈 放行/标记 DNS 流量(OUTPUT)..."
   if [ "$BIN_NAME" = "mihomo" ] || [ "$BIN_NAME" = "hysteria" ] || [ "$BIN_NAME" = "clash" ]; then
+    log_safe "🚦 $CHAIN_OUT 放行 53 端口(DNS)..."
     $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p tcp --dport 53 -j RETURN
     $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp --dport 53 -j RETURN
   else
-    if [ "$tproxy_supported" -eq 1 ]; then
-      $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p tcp --dport 53 -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
-      $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp --dport 53 -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_ID"
-    else
-      $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p tcp --dport 53 -j MARK --set-xmark "$MARK_ID"
-      $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp --dport 53 -j MARK --set-xmark "$MARK_ID"
-    fi
+    log_safe "🚥 $CHAIN_OUT 重定向 53 端口(DNS)..."
+    $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p tcp --dport 53 -j MARK --set-xmark "$MARK_ID"
+    $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -p udp --dport 53 -j MARK --set-xmark "$MARK_ID"
   fi
 
-  log_safe "💼 放行/重定向应用流量"
+  for ip in $lan_ips; do
+    log_safe "🚦 $CHAIN_OUT 放行内网($ip)..."
+    $ip_cmd -w 100 -t mangle -A "$CHAIN_OUT" -d "$ip" -j RETURN
+  done
+
   add_app_rules "$ip_cmd"
 
   # 挂接到 OUTPUT
-  log_safe "🏁 应用至 OUTPUT..."
+  log_safe "🏁 $CHAIN_OUT 应用至 OUTPUT..."
   $ip_cmd -w 100 -t mangle -C OUTPUT -j "$CHAIN_OUT" 2>/dev/null || \
   $ip_cmd -w 100 -t mangle -I OUTPUT -j "$CHAIN_OUT"
 
   # [OPT] 自吃保护(含 UDP)：阻止本地服务访问 TPROXY 端口，防环
   log_safe "🛡️ 阻止本地服务访问 tproxy 端口..."
-  $ip_cmd -w 100 -C OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || \
-  $ip_cmd -w 100 -A OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT
-  $ip_cmd -w 100 -C OUTPUT -d "$local_ip" -p udp -m owner --uid-owner "$USER_ID" -m udp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || \
-  $ip_cmd -w 100 -A OUTPUT -d "$local_ip" -p udp -m owner --uid-owner "$USER_ID" -m udp --dport "$TPROXY_PORT" -j REJECT
+  $ip_cmd -w 100 -C OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || \
+  $ip_cmd -w 100 -A OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT
+  $ip_cmd -w 100 -C OUTPUT -d "$local_ip" -p udp -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -m udp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || \
+  $ip_cmd -w 100 -A OUTPUT -d "$local_ip" -p udp -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -m udp --dport "$TPROXY_PORT" -j REJECT
 
   # Clash 全局 DNS 模式（仅当 nat 可用）
   if $ip_cmd -t nat -nL >/dev/null 2>&1; then
     if [ "$BIN_NAME" = "mihomo" ] || [ "$BIN_NAME" = "hysteria" ] || [ "$BIN_NAME" = "clash" ]; then
-      log_safe "🚀 开启 clash 全局 DNS 模式..."
+      log_safe "🚀 开启全局 DNS 模式..."
       $ip_cmd -w 100 -t nat -N CLASH_DNS_PRE 2>/dev/null || true
       $ip_cmd -w 100 -t nat -F CLASH_DNS_PRE 2>/dev/null || true
-      $ip_cmd -w 100 -t nat -A CLASH_DNS_PRE -p udp --dport 53 -j REDIRECT --to-ports 1053
+      $ip_cmd -w 100 -t nat -A CLASH_DNS_PRE -p udp --dport 53 -j REDIRECT --to-ports "$CLASH_DNS_PORT"
       $ip_cmd -w 100 -t nat -C PREROUTING -j CLASH_DNS_PRE 2>/dev/null || \
       $ip_cmd -w 100 -t nat -I PREROUTING -j CLASH_DNS_PRE
 
       $ip_cmd -w 100 -t nat -N CLASH_DNS_OUT 2>/dev/null || true
       $ip_cmd -w 100 -t nat -F CLASH_DNS_OUT 2>/dev/null || true
-      $ip_cmd -w 100 -t nat -A CLASH_DNS_OUT -m owner --uid-owner "$USER_ID" -j RETURN
-      $ip_cmd -w 100 -t nat -A CLASH_DNS_OUT -p udp --dport 53 -j REDIRECT --to-ports 1053
+      $ip_cmd -w 100 -t nat -A CLASH_DNS_OUT -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -j RETURN
+      $ip_cmd -w 100 -t nat -A CLASH_DNS_OUT -p udp --dport 53 -j REDIRECT --to-ports "$CLASH_DNS_PORT"
       $ip_cmd -w 100 -t nat -C OUTPUT -j CLASH_DNS_OUT 2>/dev/null || \
       $ip_cmd -w 100 -t nat -I OUTPUT -j CLASH_DNS_OUT
     fi
     # FakeIP 的 ICMP 修复（与原版一致）
     if [ -n "$fire" ]; then
-      log_safe "👻 修复 FakeIP ICMP..."
+      log_safe "👻 修复 FakeIP($fire) ICMP..."
       $ip_cmd -w 100 -t nat -A OUTPUT     -d "$fire" -p icmp -j DNAT --to-destination "$local_ip" 2>/dev/null || true
       $ip_cmd -w 100 -t nat -A PREROUTING -d "$fire" -p icmp -j DNAT --to-destination "$local_ip" 2>/dev/null || true
     fi
   else
-    log_safe "❗ $ip_cmd 不支持 NAT 表, 跳过相关步骤"
+    log_safe "❗ $ip_cmd 不支持 NAT 表, 已跳过"
   fi
 }
 
@@ -360,11 +301,8 @@ remove_tproxy_rules() {
   $ip_cmd -w 100 -t mangle -F "$CHAIN_PRE" 2>/dev/null || true
   $ip_cmd -w 100 -t mangle -X "$CHAIN_PRE" 2>/dev/null || true
 
-  # 移除自吃保护（TCP/UDP，覆盖 USER_ID 与 root）
-  $ip_cmd -w 100 -D OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || true
-  $ip_cmd -w 100 -D OUTPUT -d "$local_ip" -p udp -m owner --uid-owner "$USER_ID" -m udp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || true
-  $ip_cmd -w 100 -D OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner 0          -m tcp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || true
-  $ip_cmd -w 100 -D OUTPUT -d "$local_ip" -p udp -m owner --uid-owner 0          -m udp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || true
+  $ip_cmd -w 100 -D OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -m tcp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || true
+  $ip_cmd -w 100 -D OUTPUT -d "$local_ip" -p udp -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -m udp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || true
 
   if $ip_cmd -t nat -nL >/dev/null 2>&1; then
     if [ "$BIN_NAME" = "mihomo" ] || [ "$BIN_NAME" = "hysteria" ] || [ "$BIN_NAME" = "clash" ]; then
