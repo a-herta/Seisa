@@ -15,7 +15,12 @@ MODDIR=$(dirname "$0")
 
 MAX_RETRIES=${MAX_RETRIES:-3}
 RETRY_DELAY=${RETRY_DELAY:-5}
-TMPDIR=$(mktemp -d "${PERSIST_DIR}/.tmp")
+# Create a safe temporary directory. Try mktemp with template, fallback to a pid-based dir.
+TMPDIR=$(mktemp -d "${PERSIST_DIR}/.tmp.XXXXXX" 2>/dev/null || true)
+if [ -z "$TMPDIR" ]; then
+  TMPDIR="${PERSIST_DIR}/.tmp.$$"
+  mkdir -p "$TMPDIR" 2>/dev/null || TMPDIR="$(mktemp -d 2>/dev/null || echo "/tmp/.tmp.$$")"
+fi
 API_URL_BASE="https://api.github.com/repos/${BIN_REPO}/releases"
 
 log_safe "❤️ === [update-bin] ==="
@@ -35,12 +40,17 @@ log_safe "💻 检测到 CPU 架构: ${ARCHITECTURE:-未知}"
 retry_curl() {
   url="$1"; output_path="$2"; count=0
   while [ "$count" -lt "$MAX_RETRIES" ]; do
-    if curl -sSL -H "Accept: application/vnd.github.v3+json" ${AUTH_HDR:+-H "$AUTH_HDR"} \
-      "$url" -o "$output_path" && [ -s "$output_path" ]; then
-      return 0
-    fi
+    if [ -n "$AUTH_HDR" ]; then
+      curl -sSL -H "Accept: application/vnd.github.v3+json" -H "$AUTH_HDR" "$url" -o "$output_path" && [ -s "$output_path" ];
+    else
+      curl -sSL -H "Accept: application/vnd.github.v3+json" "$url" -o "$output_path" && [ -s "$output_path" ];
+    fi && return 0
+
     count=$((count + 1))
-    [ "$count" -ge "$MAX_RETRIES" ] && { log_safe "❌ 下载失败: $url"; return 1; }
+    if [ "$count" -ge "$MAX_RETRIES" ]; then
+      log_safe "❌ 下载失败: $url"
+      return 1
+    fi
     log_safe "⏳ 下载失败, $RETRY_DELAY 秒后重试 ($count/$MAX_RETRIES)..."
     sleep "$RETRY_DELAY"
   done
