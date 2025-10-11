@@ -189,7 +189,6 @@ resolve_user_group() {
 
 # --- 后台进程管理 ---
 
-# bg_run CMD [ARGS...] : 在后台运行命令, 可指定 UID/GID, 并返回 PID 和 UID
 bg_run() {
   [ "$#" -ge 1 ] || { echo "Usage: bg_run CMD [ARGS...]" >&2; return 1; }
 
@@ -200,21 +199,16 @@ bg_run() {
     $(resolve_user_group "$TPROXY_USER")
 EOF
 
-  # 优先使用 busybox setuidgid, 然后是 su
   if [ -n "$uid_num" ]; then
     if command -v busybox >/dev/null 2>&1 && busybox setuidgid 0 true 2>/dev/null; then
-      if [ -n "$gid_num" ]; then
-        setuid_cmd="busybox setuidgid ${uid_num}:${gid_num}"
-      else
-        setuid_cmd="busybox setuidgid ${uid_num}"
-      fi
-    elif command -v su >/dev/null 2>&1; then
-       # su 的实现差异很大, 这是一个通用但可能不完全可靠的回退
-       setuid_cmd="su $uid_num"
+      setuid_cmd="busybox setuidgid ${uid_num}${gid_num:+:$gid_num}"
+    elif su -c true >/dev/null 2>&1; then
+      setuid_cmd="su -c"
+    elif su 0 true >/dev/null 2>&1; then
+      setuid_cmd="su $uid_num -c"
     fi
   fi
 
-  # 使用 nohup 和 setsid 实现后台守护
   if command -v nohup >/dev/null 2>&1 && command -v setsid >/dev/null 2>&1; then
     nohup setsid ${setuid_cmd:+$setuid_cmd} "$@" </dev/null >"$BG_RUN_LOG" 2>&1 &
   elif command -v nohup >/dev/null 2>&1; then
@@ -222,17 +216,16 @@ EOF
   elif command -v setsid >/dev/null 2>&1; then
     setsid ${setuid_cmd:+$setuid_cmd} "$@" </dev/null >"$BG_RUN_LOG" 2>&1 &
   else
-    # 最后的兼容手段
     ( trap '' HUP; exec ${setuid_cmd:+$setuid_cmd} "$@" ) </dev/null >"$BG_RUN_LOG" 2>&1 &
   fi
 
   pid=$!
-  # 如果 UID 未知, 尝试从 /proc 获取
-  if [ -z "$uid_num" ] && [ -r "/proc/$pid" ]; then
-    uid_num=$(stat -c %u "/proc/$pid" 2>/dev/null)
-  fi
 
-  echo "$pid $uid_num"
+  run_user=$(stat -c %U /proc/${pid})
+  run_group=$(stat -c %G /proc/${pid})
+  log_safe "✅ 后台进程 $pid 已启动, 用户 $run_user, 组 $run_group"
+
+  echo $pid
 }
 
 # END of common.sh

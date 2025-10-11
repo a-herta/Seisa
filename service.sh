@@ -79,22 +79,21 @@ ensure_bin() {
   if [ "$en" = "1" ]; then
     log_safe "🔄 已启用自动更新, 正在检查版本..."
 
-    # 1. 获取本地版本
     ver_str=$("$BIN_PATH" version 2>/dev/null | awk '/version/ {sub(/.*version /, ""); sub(/^v/, ""); print $1}')
     current_ver=${ver_str:-"0.0.0"}
     log_safe "💻 当前版本: $current_ver"
 
-    # 2. 获取远程最新版本标签
     api_url="https://api.github.com/repos/${bin_repo}/releases/latest"
-    latest_tag=$(curl -sSL "$api_url" | awk -F '"' '/"tag_name":/ {print $4}' | sed 's/v//' | head -n 1 || echo "0.0.0")
+    latest_tag=$(curl -sSL "$api_url" | awk -F '"' '/"tag_name":/ {print $4}' | sed 's/v//' | head -n 1)
     log_safe "☁️ 最新版本: $latest_tag"
 
-    # 3. 比较版本 (简单的字符串比较)
-    if [ "$latest_tag" != "$current_ver" ] && [ "$latest_tag" != "0.0.0" ]; then
-      log_safe "💡 发现新版本, 开始更新..."
-      sh "$update" "$bin_repo" >/dev/null 2>&1 || log_safe "❌ 自动更新执行失败"
+    if [ -n "$latest_tag" ]; then
+      if [ "$latest_tag" != "$current_ver" ]; then
+        log_safe "💡 发现新版本, 开始更新..."
+        sh "$update" "$bin_repo" >/dev/null 2>&1 || log_safe "❌ 自动更新执行失败"
+      fi
     else
-      log_safe "✅ 当前已是最新版本, 无需更新"
+      log_safe "❌ 获取新版本失败"
     fi
   fi
 
@@ -118,8 +117,7 @@ start_bin() {
   : > "$BIN_LOG"
 
   # 使用 bg_run 启动进程
-  pid_uid=$(BG_RUN_LOG="$BIN_LOG" bg_run "$BIN_PATH" run -D "$PERSIST_DIR")
-  pid=$(echo "$pid_uid" | cut -d' ' -f1)
+  pid=$(BG_RUN_LOG="$BIN_LOG" bg_run "$BIN_PATH" run -D "$PERSIST_DIR")
   echo "$pid" > "$PIDFILE"
 
   # 等待进程启动并检查初始化状态
