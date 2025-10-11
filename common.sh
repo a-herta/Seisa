@@ -188,44 +188,30 @@ resolve_user_group() {
 }
 
 # --- 后台进程管理 ---
-
 bg_run() {
   [ "$#" -ge 1 ] || { echo "Usage: bg_run CMD [ARGS...]" >&2; return 1; }
 
   : "${BG_RUN_LOG:=/dev/null}"
   umask 077
 
-  read -r uid_num gid_num <<EOF
-    $(resolve_user_group "$TPROXY_USER")
-EOF
-
-  if [ -n "$uid_num" ]; then
-    if command -v busybox >/dev/null 2>&1 && busybox setuidgid 0 true 2>/dev/null; then
-      setuid_cmd="busybox setuidgid ${uid_num}${gid_num:+:$gid_num}"
-    elif su -c true >/dev/null 2>&1; then
-      setuid_cmd="su -c"
-    elif su 0 true >/dev/null 2>&1; then
-      setuid_cmd="su $uid_num -c"
-    fi
+  if command -v busybox >/dev/null 2>&1 && busybox setuidgid 0 true 2>/dev/null; then
+    set -- busybox setuidgid "$TPROXY_USER" "$@"
+  else
+    user="${TPROXY_USER%%:*}"
+    set -- su - "$user" -c "$*"
   fi
 
   if command -v nohup >/dev/null 2>&1 && command -v setsid >/dev/null 2>&1; then
-    nohup setsid ${setuid_cmd:+$setuid_cmd} "$@" </dev/null >"$BG_RUN_LOG" 2>&1 &
+    nohup setsid "$@" </dev/null >"$BG_RUN_LOG" 2>&1 &
   elif command -v nohup >/dev/null 2>&1; then
-    nohup ${setuid_cmd:+$setuid_cmd} "$@" </dev/null >"$BG_RUN_LOG" 2>&1 &
+    nohup "$@" </dev/null >"$BG_RUN_LOG" 2>&1 &
   elif command -v setsid >/dev/null 2>&1; then
-    setsid ${setuid_cmd:+$setuid_cmd} "$@" </dev/null >"$BG_RUN_LOG" 2>&1 &
+    setsid "$@" </dev/null >"$BG_RUN_LOG" 2>&1 &
   else
-    ( trap '' HUP; exec ${setuid_cmd:+$setuid_cmd} "$@" ) </dev/null >"$BG_RUN_LOG" 2>&1 &
+    ( trap '' HUP; exec "$@" ) </dev/null >"$BG_RUN_LOG" 2>&1 &
   fi
 
-  pid=$!
-
-  run_user=$(stat -c %U /proc/${pid})
-  run_group=$(stat -c %G /proc/${pid})
-  log_safe "✅ 后台进程 $pid 已启动, 用户 $run_user, 组 $run_group"
-
-  echo $pid
+  echo $!
 }
 
 # END of common.sh

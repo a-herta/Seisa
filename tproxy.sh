@@ -13,7 +13,7 @@ MODDIR=$(dirname "$0")
 . "$MODDIR/common.sh"
 
 # --- Defaults ---------------------------------------------------------------
-MARK_HEX=${MARK_HEX:-"0x01"}
+MARK_HEX=${MARK_HEX:-"0x1/0x1"}
 TABLE_ID=${TABLE_ID:-"100"}
 
 CHAIN_NAME=${CHAIN_NAME:-"FIREFLY"}
@@ -103,8 +103,8 @@ unset_routes() {
 # --- App split rules --------------------------------------------------------
 add_global_proxy_rules() {
   ip_cmd="${1:-iptables}"
-  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -j MARK --set-xmark "$MARK_HEX/$MARK_HEX"
-  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -p udp -j MARK --set-xmark "$MARK_HEX/$MARK_HEX"
+  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -j MARK --set-xmark "$MARK_HEX"
+  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -p udp -j MARK --set-xmark "$MARK_HEX"
 }
 
 add_blacklist_rules() {
@@ -131,15 +131,15 @@ add_whitelist_rules() {
     uid=$(dumpsys package "$app_pkg" 2>/dev/null | grep 'userId=' | cut -d'=' -f2)
     if [ -n "$uid" ]; then
       log_safe "⚪ 白名单代理: $app_pkg ($uid)"
-      add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -m owner --uid-owner "$uid" -j MARK --set-xmark "$MARK_HEX/$MARK_HEX"
-      add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -p udp -m owner --uid-owner "$uid" -j MARK --set-xmark "$MARK_HEX/$MARK_HEX"
+      add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -m owner --uid-owner "$uid" -j MARK --set-xmark "$MARK_HEX"
+      add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -p udp -m owner --uid-owner "$uid" -j MARK --set-xmark "$MARK_HEX"
     fi
   done
   # 必要系统 UID, 可按需保留
-  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -m owner --uid-owner 0    -j MARK --set-xmark "$MARK_HEX/$MARK_HEX"
-  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -p udp -m owner --uid-owner 0    -j MARK --set-xmark "$MARK_HEX/$MARK_HEX"
-  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -m owner --uid-owner 1052 -j MARK --set-xmark "$MARK_HEX/$MARK_HEX"
-  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -p udp -m owner --uid-owner 1052 -j MARK --set-xmark "$MARK_HEX/$MARK_HEX"
+  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -m owner --uid-owner 0    -j MARK --set-xmark "$MARK_HEX"
+  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -p udp -m owner --uid-owner 0    -j MARK --set-xmark "$MARK_HEX"
+  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -p tcp -m owner --uid-owner 1052 -j MARK --set-xmark "$MARK_HEX"
+  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -p udp -m owner --uid-owner 1052 -j MARK --set-xmark "$MARK_HEX"
 }
 
 add_app_rules() {
@@ -176,7 +176,7 @@ add_tproxy_rules() {
   add_rule "$ip_cmd" -w 100 -t mangle -N "$CHAIN_OUT"
   add_rule "$ip_cmd" -w 100 -t mangle -F "$CHAIN_OUT"
 
-  add_rule "$ip_cmd" -w 100 -t mangle -A DIVERT -j MARK --set-xmark "$MARK_HEX/$MARK_HEX"
+  add_rule "$ip_cmd" -w 100 -t mangle -A DIVERT -j MARK --set-xmark "$MARK_HEX"
   add_rule "$ip_cmd" -w 100 -t mangle -A DIVERT -j ACCEPT
 
   # Bypass intranet/reserved ranges
@@ -185,8 +185,8 @@ add_tproxy_rules() {
   done
 
   # Global mode: catch-all TPROXY after bypass/socket rules
-  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -j TPROXY --on-ip "$local_ip" --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX/$MARK_HEX"
-  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_PRE" -p udp -j TPROXY --on-ip "$local_ip" --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX/$MARK_HEX"
+  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -j TPROXY --on-ip "$local_ip" --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
+  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_PRE" -p udp -j TPROXY --on-ip "$local_ip" --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
 
   # Hook PREROUTING -> CHAIN_PRE
   ensure_hook "$ip_cmd" mangle PREROUTING "$CHAIN_PRE"
@@ -194,7 +194,7 @@ add_tproxy_rules() {
   add_rule "$ip_cmd" -w 100 -t mangle -I PREROUTING 1 -p tcp -m socket --transparent -j DIVERT
 
   # OUTPUT chain: bypass proxy user
-  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -j RETURN
+  add_rule "$ip_cmd" -w 100 -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" --suppl-groups -j RETURN
 
   # OUTPUT: ignore specific egress interfaces
   if [ -n "$IGNORE_LIST" ]; then
@@ -224,7 +224,7 @@ add_tproxy_rules() {
 
       add_rule "$ip_cmd" -w 100 -t nat -N CLASH_DNS_OUT
       add_rule "$ip_cmd" -w 100 -t nat -F CLASH_DNS_OUT
-      add_rule "$ip_cmd" -w 100 -t nat -A CLASH_DNS_OUT -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -j RETURN
+      add_rule "$ip_cmd" -w 100 -t nat -A CLASH_DNS_OUT -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" --suppl-groups -j RETURN
       add_rule "$ip_cmd" -w 100 -t nat -A CLASH_DNS_OUT -p tcp --dport 53 -j REDIRECT --to-ports "$CLASH_DNS_PORT"
       add_rule "$ip_cmd" -w 100 -t nat -A CLASH_DNS_OUT -p udp --dport 53 -j REDIRECT --to-ports "$CLASH_DNS_PORT"
       ensure_hook "$ip_cmd" nat OUTPUT CLASH_DNS_OUT
@@ -239,8 +239,8 @@ add_tproxy_rules() {
 
   # Self-protection: block local service hitting tproxy port (TCP+UDP)
   log_safe "🛡️ 阻止本地服务访问 tproxy 端口 $TPROXY_PORT"
-  add_rule "$ip_cmd" -w 100 -A OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" --dport "$TPROXY_PORT" -j REJECT
-  add_rule "$ip_cmd" -w 100 -A OUTPUT -d "$local_ip" -p udp -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" --dport "$TPROXY_PORT" -j REJECT
+  add_rule "$ip_cmd" -w 100 -A OUTPUT -d "$local_ip" -p tcp --dport "$TPROXY_PORT" -j REJECT
+  add_rule "$ip_cmd" -w 100 -A OUTPUT -d "$local_ip" -p udp --dport "$TPROXY_PORT" -j REJECT
 
   # FakeIP ICMP fix (if nat available)
   if $ip_cmd -t nat -nL >/dev/null 2>&1 && [ -n "$fire" ]; then
@@ -270,8 +270,8 @@ remove_tproxy_rules() {
   add_rule "$ip_cmd" -w 100 -t mangle -X "$CHAIN_OUT"
 
   # Remove self-protection rejects
-  add_rule "$ip_cmd" -w 100 -D OUTPUT -d "$local_ip" -p tcp -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" --dport "$TPROXY_PORT" -j REJECT
-  add_rule "$ip_cmd" -w 100 -D OUTPUT -d "$local_ip" -p udp -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" --dport "$TPROXY_PORT" -j REJECT
+  add_rule "$ip_cmd" -w 100 -D OUTPUT -d "$local_ip" -p tcp --dport "$TPROXY_PORT" -j REJECT
+  add_rule "$ip_cmd" -w 100 -D OUTPUT -d "$local_ip" -p udp --dport "$TPROXY_PORT" -j REJECT
 
   # nat DNS and FakeIP ICMP cleanup
   if $ip_cmd -t nat -nL >/dev/null 2>&1; then

@@ -6,9 +6,12 @@
   "dns": {
     "servers": [
       {
-        "type": "quic",
+        "type": "h3",
         "tag": "aliyun",
-        "server": "223.5.5.5"
+        "server": "223.5.5.5",
+        "tls": {
+          "enabled": true
+        }
       },
       {
         "type": "fakeip",
@@ -61,7 +64,7 @@
         "SG",
         "Direct"
       ],
-      "default": "JP"
+      "default": "US"
     },
     {
       "type": "direct",
@@ -274,36 +277,24 @@
       "type": "selector",
       "tag": "Available",
       "outbounds": [
-        "🇹🇼 TW-香港 WS",
-        "🇭🇰 HK-香港 TCP",
-        "🇯🇵 JP-日本 WS",
-        "🇯🇵 JP-日本 TCP",
-        "🇹🇼 TW-台湾 WS",
-        "🇹🇼 TW-台湾 TCP",
-        "🇸🇬 SG-新加坡 WS",
-        "🇸🇬 SG-新加坡 TCP",
-        "🇰🇷 KR-韩国 WS",
-        "🇰🇷 KR-韩国 TCP",
-        "🇺🇸 US-美国 WS",
-        "🇺🇸 US-美国 TCP"
+        "🇭🇰 HK-香港",
+        "🇯🇵 JP-日本",
+        "🇹🇼 TW-台湾",
+        "🇸🇬 SG-新加坡",
+        "🇰🇷 KR-韩国",
+        "🇺🇸 US-美国"
       ]
     },
     {
       "type": "urltest",
       "tag": "Auto",
       "outbounds": [
-        "🇹🇼 TW-香港 WS",
-        "🇭🇰 HK-香港 TCP",
-        "🇯🇵 JP-日本 WS",
-        "🇯🇵 JP-日本 TCP",
-        "🇹🇼 TW-台湾 WS",
-        "🇹🇼 TW-台湾 TCP",
-        "🇸🇬 SG-新加坡 WS",
-        "🇸🇬 SG-新加坡 TCP",
-        "🇰🇷 KR-韩国 WS",
-        "🇰🇷 KR-韩国 TCP",
-        "🇺🇸 US-美国 WS",
-        "🇺🇸 US-美国 TCP"
+        "🇭🇰 HK-香港",
+        "🇯🇵 JP-日本",
+        "🇹🇼 TW-台湾",
+        "🇸🇬 SG-新加坡",
+        "🇰🇷 KR-韩国",
+        "🇺🇸 US-美国"
       ],
       "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
@@ -313,8 +304,7 @@
       "type": "urltest",
       "tag": "HK",
       "outbounds": [
-        "🇹🇼 TW-香港 WS",
-        "🇭🇰 HK-香港 TCP"
+        "🇭🇰 HK-香港"
       ],
       "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
@@ -324,8 +314,7 @@
       "type": "urltest",
       "tag": "TW",
       "outbounds": [
-        "🇹🇼 TW-台湾 WS",
-        "🇹🇼 TW-台湾 TCP"
+        "🇹🇼 TW-台湾"
       ],
       "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
@@ -335,8 +324,7 @@
       "type": "urltest",
       "tag": "JP",
       "outbounds": [
-        "🇯🇵 JP-日本 WS",
-        "🇯🇵 JP-日本 TCP"
+        "🇯🇵 JP-日本"
       ],
       "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
@@ -346,8 +334,7 @@
       "type": "urltest",
       "tag": "KR",
       "outbounds": [
-        "🇰🇷 KR-韩国 WS",
-        "🇰🇷 KR-韩国 TCP"
+        "🇰🇷 KR-韩国"
       ],
       "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
@@ -357,8 +344,7 @@
       "type": "urltest",
       "tag": "US",
       "outbounds": [
-        "🇺🇸 US-美国 WS",
-        "🇺🇸 US-美国 TCP"
+        "🇺🇸 US-美国"
       ],
       "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
@@ -368,12 +354,59 @@
       "type": "urltest",
       "tag": "SG",
       "outbounds": [
-        "🇸🇬 SG-新加坡 WS",
-        "🇸🇬 SG-新加坡 TCP"
+        "🇸🇬 SG-新加坡"
       ],
       "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
       "tolerance": 50
+    },
+    {
+      "type": "vmess",
+      "tag": "🇭🇰 HK-香港",
+      "tcp_fast_open": true,
+      "udp_fragment": true,
+      "server": "example.com",
+      "server_port": 6666
+    },
+    {
+      "type": "vmess",
+      "tag": "🇹🇼 TW-台湾",
+      "tcp_fast_open": true,
+      "udp_fragment": true,
+      "server": "example.com",
+      "server_port": 6666
+    },
+    {
+      "type": "vmess",
+      "tag": "🇯🇵 JP-日本",
+      "tcp_fast_open": true,
+      "udp_fragment": true,
+      "server": "example.com",
+      "server_port": 6666
+    },
+    {
+      "type": "vmess",
+      "tag": "🇰🇷 KR-韩国",
+      "tcp_fast_open": true,
+      "udp_fragment": true,
+      "server": "example.com",
+      "server_port": 6666
+    },
+    {
+      "type": "vmess",
+      "tag": "🇺🇸 US-美国",
+      "tcp_fast_open": true,
+      "udp_fragment": true,
+      "server": "example.com",
+      "server_port": 6666
+    },
+    {
+      "type": "vmess",
+      "tag": "🇸🇬 SG-新加坡",
+      "tcp_fast_open": true,
+      "udp_fragment": true,
+      "server": "example.com",
+      "server_port": 6666
     }
   ],
   "route": {
@@ -699,4 +732,3 @@
     }
   }
 }
-

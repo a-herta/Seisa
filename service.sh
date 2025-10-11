@@ -133,7 +133,9 @@ start_bin() {
 
     # 检查日志中是否有成功初始化的标志
     if grep -qi "started" "$BIN_LOG" 2>/dev/null && ! grep -qi "error\|failed\|fatal" "$BIN_LOG" 2>/dev/null; then
-      log_safe "✅ 代理核心启动成功 ($pid)"
+      run_user=$(stat -c %U /proc/"$pid")
+      run_group=$(stat -c %G /proc/"$pid")
+      log_safe "✅ 代理核心启动成功 ($run_user:$run_group)"
       return 0
     fi
 
