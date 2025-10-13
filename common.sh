@@ -1,14 +1,6 @@
 #!/system/bin/sh
 # =====================================================================
-# 📜 common.sh - 模块通用核心脚本（Magisk/KernelSU 环境）
-# ---------------------------------------------------------------------
-# 功能：
-#   - 定义全局变量（路径、标识符、配置文件等）
-#   - 配置读写（并发安全）、日志、安全退出
-#   - 网络参数与 IPv6 检测
-#   - 权限设置（兼容安装环境/普通环境）
-#   - 域名解析（多方案回退）
-#   - 后台进程启动（可指定 UID/GID）
+# 📜 common.sh - 模块通用核心脚本
 # =====================================================================
 
 # --- 模块路径与标识 ---
@@ -18,36 +10,39 @@ PERSIST_DIR=${PERSIST_DIR:-"/data/adb/$MODID"}
 
 # --- 并发安全配置读写 ---
 MOD_SETTING=${MOD_SETTING:-"$PERSIST_DIR/settings.conf"}
-# read_setting <key> [default] : 从配置文件读取键值
+
 read_setting() {
-  key="$1"; default_val="$2"; f="$MOD_SETTING"
-  [ -f "$f" ] || { echo "$default_val"; return; }
+  f="$MOD_SETTING"
+  [ -f "$f" ] || {
+    echo "$2"
+    return
+  }
 
-  val=$(grep -m1 -E "^[[:space:]]*${key}=" "$f" 2>/dev/null | \
-        sed -E "s/^[[:space:]]*${key}=[[:space:]]*//" | \
-        sed -E 's/[[:space:]]+$//')
+  val=$(grep -m1 -E "^[[:space:]]*$1=" "$f" 2>/dev/null \
+    | sed -E "s/^[[:space:]]*$1=[[:space:]]*//" \
+    | sed -E 's/[[:space:]]+$//')
 
-  [ -n "$val" ] && echo "$val" || echo "$default_val"
+  [ -n "$val" ] && echo "$val" || echo "$2"
 }
 
-# write_setting <key> <value> : 并发安全写入配置
 write_setting() {
-  key="$1"; val="$2"; f="$MOD_SETTING"; lock_dir="${f}.lock"
+  f="$MOD_SETTING"
+  lock_dir="${f}.lock"
 
   mkdir -p "$(dirname "$f")"
-  [ -f "$f" ] || echo "# 模块配置文件" > "$f"
+  [ -f "$f" ] || echo "# 模块配置文件" >"$f"
 
   # 使用 lock 目录实现原子操作, 防止并发写入冲突
-  while ! mkdir "$lock_dir" 2>/dev/null; do 
+  while ! mkdir "$lock_dir" 2>/dev/null; do
     sleep 0.05
   done
 
   trap 'rmdir "$lock_dir" 2>/dev/null' EXIT
 
-  if grep -q -E "^[[:space:]]*${key}=" "$f"; then
-    sed -i -E "s|^[[:space:]]*${key}=.*|${key}=${val}|" "$f"
+  if grep -q -E "^[[:space:]]*$1=" "$f"; then
+    sed -i -E "s|^[[:space:]]*$1=.*|$1=$2|" "$f"
   else
-    echo "${key}=${val}" >> "$f"
+    echo "$1=$2" >>"$f"
   fi
 
   chmod 600 "$f" 2>/dev/null || true
@@ -69,51 +64,46 @@ BIN_PATH=${BIN_PATH:-"$MODDIR/$BIN_NAME"}
 BIN_LOG=${BIN_LOG:-"$PERSIST_DIR/$BIN_NAME.log"}
 BIN_CONF=${BIN_CONF:-"$PERSIST_DIR/$(read_setting "BIN_CONFIG" "config.json")"}
 
-# --- 代理模式与用户配置 ---
-PROXY_MODE=${PROXY_MODE:-"$(read_setting "PROXY_MODE" "blacklist")"}
-APP_PACKAGES=${APP_PACKAGES:-$(read_setting "APP_PACKAGES" "")}
+# --- 代理用户配置 ---
+TPROXY_USER=${TPROXY_USER:-"root:net_admin"}
 
 # --- 环境与路径 ---
 export PATH="$PATH:/data/adb/magisk:/data/adb/ksu/bin:/data/adb/ap/bin"
 if type ui_print >/dev/null 2>&1; then IS_INSTALLER_ENV=1; else IS_INSTALLER_ENV=0; fi
 
 # --- 日志与退出 ---
-
-# log_safe <msg> : 安全地记录日志, 兼容安装环境和普通环境
 log_safe() {
-  msg="$*"; ts="[$(date +'%T')]"
-  
-  if [ "$IS_INSTALLER_ENV" = "1" ]; then 
+  msg="$*"
+  ts="[$(date +'%T')]"
+
+  if [ "$IS_INSTALLER_ENV" = "1" ]; then
     ui_print "$ts $msg"
-  else 
-    echo "$ts $msg"
-  fi
-  
-  if [ -n "$LOGFILE" ]; then 
-    mkdir -p "$(dirname -- "$LOGFILE")" 2>/dev/null
-    printf '%s %s\n' "$ts" "$msg" >> "$LOGFILE"
+  else
+    if [ -n "$LOGFILE" ]; then
+      mkdir -p "$(dirname -- "$LOGFILE")" 2>/dev/null
+      printf '%s %s\n' "$ts" "$msg" >>"$LOGFILE"
+    fi
   fi
 }
 
-# abort_safe <msg> : 安全地终止脚本, 兼容安装环境和普通环境
 abort_safe() {
-  msg="$*"; ts="[$(date +'%T')]"
+  msg="$*"
+  ts="[$(date +'%T')]"
 
   if [ "$IS_INSTALLER_ENV" = "1" ] && type abort >/dev/null 2>&1; then
     abort "$ts $msg"
   else
     echo "$ts $msg" >&2
-    [ -n "$LOGFILE" ] && printf '%s %s\n' "$ts" "$msg" >> "$LOGFILE"
+    [ -n "$LOGFILE" ] && printf '%s %s\n' "$ts" "$msg" >>"$LOGFILE"
     exit 1
   fi
 }
 
 # --- 模块状态更新 ---
-
-# update_desc [icon] : 更新 module.prop 中的模块描述, 以反映代理状态
 update_desc() {
   if [ -n "$1" ]; then icon="$1"; elif [ -f "$PIDFILE" ]; then icon="✅"; else icon="⛔"; fi
-  prop="$MODDIR/module.prop"; tmp="${prop}.new.$$"
+  prop="$MODDIR/module.prop"
+  tmp="${prop}.new.$$"
 
   awk -v icon="$icon" '
   /^description=/ {
@@ -128,42 +118,10 @@ update_desc() {
     next
   }
   { print }
-  ' "$prop" > "$tmp" && mv -f "$tmp" "$prop"
-}
-
-# --- 权限设置 ---
-
-# set_perm_safe <path> <uid> <gid> <perm> [fileperm] [context] : 安全设置权限, 兼容不同环境
-set_perm_safe() {
-  path="$1"; owner="$2"; group="$3"; perm="$4"; fileperm="$5"; ctx="$6"
-  [ -n "$path" ] || return 1
-
-  if [ "$IS_INSTALLER_ENV" = "1" ]; then
-    if [ -n "$fileperm" ]; then
-      set_perm_recursive "$path" "$owner" "$group" "$perm" "$fileperm" "$ctx" 2>/dev/null || true
-    else
-      set_perm "$path" "$owner" "$group" "$perm" "$ctx" 2>/dev/null || true
-    fi
-    return 0
-  fi
-
-  if [ -d "$path" ] && [ -n "$fileperm" ]; then
-    chown -R "$owner:$group" "$path" 2>/dev/null || chown -R "$owner.$group" "$path" 2>/dev/null || true
-    find "$path" -type d -exec chmod "$perm" {} \; 2>/dev/null || true
-    find "$path" -type f -exec chmod "$fileperm" {} \; 2>/dev/null || true
-  else
-    chown "$owner:$group" "$path" 2>/dev/null || chown "$owner.$group" "$path" 2>/dev/null || true
-    chmod "$perm" "$path" 2>/dev/null || true
-  fi
-
-  if [ -n "$ctx" ] && command -v chcon >/dev/null 2>&1; then
-    chcon -R "$ctx" "$path" 2>/dev/null || true
-  fi
+  ' "$prop" >"$tmp" && mv -f "$tmp" "$prop"
 }
 
 # --- 提取用户/组ID ---
-
-# 解析 user:group 或 uid:gid, 返回 UID 和 GID
 resolve_user_group() {
   input="$1"
 
@@ -189,26 +147,31 @@ resolve_user_group() {
 
 # --- 后台进程管理 ---
 bg_run() {
-  [ "$#" -ge 1 ] || { echo "Usage: bg_run CMD [ARGS...]" >&2; return 1; }
+  [ "$#" -ge 1 ] || {
+    echo "Usage: bg_run CMD [ARGS...]" >&2
+    return 1
+  }
 
   : "${BG_RUN_LOG:=/dev/null}"
   umask 077
 
   if command -v busybox >/dev/null 2>&1 && busybox setuidgid 0 true 2>/dev/null; then
-    set -- busybox setuidgid "$TPROXY_USER" "$@"
+    setuid_cmd="busybox setuidgid $TPROXY_USER"
   else
-    user="${TPROXY_USER%%:*}"
-    set -- su - "$user" -c "$*"
+    setuid_cmd="su -c"
   fi
 
   if command -v nohup >/dev/null 2>&1 && command -v setsid >/dev/null 2>&1; then
-    nohup setsid "$@" </dev/null >"$BG_RUN_LOG" 2>&1 &
+    nohup setsid ${setuid_cmd:+$setuid_cmd} "$@" </dev/null >"$BG_RUN_LOG" 2>&1 &
   elif command -v nohup >/dev/null 2>&1; then
-    nohup "$@" </dev/null >"$BG_RUN_LOG" 2>&1 &
+    nohup ${setuid_cmd:+$setuid_cmd} "$@" </dev/null >"$BG_RUN_LOG" 2>&1 &
   elif command -v setsid >/dev/null 2>&1; then
-    setsid "$@" </dev/null >"$BG_RUN_LOG" 2>&1 &
+    setsid ${setuid_cmd:+$setuid_cmd} "$@" </dev/null >"$BG_RUN_LOG" 2>&1 &
   else
-    ( trap '' HUP; exec "$@" ) </dev/null >"$BG_RUN_LOG" 2>&1 &
+    (
+      trap '' HUP
+      exec ${setuid_cmd:+$setuid_cmd} "$@"
+    ) </dev/null >"$BG_RUN_LOG" 2>&1 &
   fi
 
   echo $!

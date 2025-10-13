@@ -6,12 +6,9 @@
   "dns": {
     "servers": [
       {
-        "type": "h3",
+        "type": "quic",
         "tag": "aliyun",
-        "server": "223.5.5.5",
-        "tls": {
-          "enabled": true
-        }
+        "server": "223.5.5.5"
       },
       {
         "type": "fakeip",

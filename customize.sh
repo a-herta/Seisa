@@ -1,8 +1,6 @@
 #!/system/bin/sh
 # =====================================================================
 # 🛠️ customize.sh - 安装初始化脚本
-# ---------------------------------------------------------------------
-# 安装后初始化环境，停止旧实例、迁移数据、设置权限
 # =====================================================================
 
 set -e
@@ -27,7 +25,7 @@ if [ -d "/data/adb/modules/$MODID" ]; then
     sh "$SERVICE" stop >/dev/null 2>&1 || log_safe "❗ 服务可能未完全停止"
   fi
 
-  # 使用 pkill 终止残留进程，更可靠
+  # 使用 pkill 终止残留进程, 更可靠
   if command -v pkill >/dev/null 2>&1; then
     log_safe "🔍 正在使用 pkill 终止残留的 '$BIN_NAME' 进程..."
     pkill -9 -f "$BIN_NAME.*$MODID" 2>/dev/null || true
@@ -50,8 +48,7 @@ for f in config.json settings.conf github_token; do
     mv "$MODPATH/$f" "$PERSIST_DIR/"
   fi
 done
-# 确保迁移后的文件权限正确
-set_perm_safe "$PERSIST_DIR" 0 0 0755 0600
+set_perm_recursive "$PERSIST_DIR" 0 0 0755 0600
 
 # 4. 设置模块文件权限
 log_safe "🔒 设置模块文件权限..."
@@ -60,11 +57,10 @@ set_perm_recursive "$MODPATH" 0 0 0755 0644
 # 5. 设置脚本和核心程序的可执行权限
 log_safe "🚀 设置可执行权限..."
 for script in "$MODPATH"/*.sh; do
-  [ -f "$script" ] && set_perm_safe "$script" 0 0 0755
+  [ -f "$script" ] && set_perm "$script" 0 0 0755
 done
 if [ -f "$MODPATH/$BIN_NAME" ]; then
-  set_perm_safe "$MODPATH/$BIN_NAME" 0 0 0755
+  set_perm "$MODPATH/$BIN_NAME" 0 0 0755
 fi
 
-log_safe "✨ 初始化完成，请修改配置并重启设备"
-exit 0
+log_safe "✨ 初始化完成, 请修改配置并重启设备"
