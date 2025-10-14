@@ -20,8 +20,9 @@ CUSTOM_CHAIN=${CUSTOM_CHAIN:-"DIVERT $CHAIN_PRE $CHAIN_OUT"}
 INTRANET4=${INTRANET4:-"10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 224.0.0.0/4 240.0.0.0/4"}
 INTRANET6=${INTRANET6:-"::1/128 fe80::/10 fc00::/7 ff00::/8"}
 
-IFACES_LIST="${IFACES_LIST:-"wlan+ ap+ rndis+ ncm+"}"
+IFACES_LIST="${IFACES_LIST:-"lo wlan+ ap+ rndis+ ncm+"}"
 IGNORE_LIST="${IGNORE_LIST:-""}"
+UID_LIST="${UID_LIST:-""}"
 
 FAIR4=${FAIR4:-"198.18.0.0/15"}
 FAIR6=${FAIR6:-"fc00::/18"}
@@ -31,7 +32,6 @@ CLASH_DNS_PORT=${CLASH_DNS_PORT:-"1053"}
 
 IPV6_SUPPORT=${IPV6_SUPPORT:-"true"}
 PROXY_MODE=${PROXY_MODE:-"$(read_setting "PROXY_MODE" "blacklist")"}
-APP_PACKAGES=${APP_PACKAGES:-$(read_setting "APP_PACKAGES" "")}
 
 log_safe "❤️ === [tproxy] ==="
 
@@ -89,6 +89,21 @@ unset_routes() {
 }
 
 # --- App split rules --------------------------------------------------------
+find_packages_uid() {
+  up=$(read_setting "USER_PACKAGES" "")
+  for user_pkg in $up; do
+    user="${user_pkg%%:*}"
+    pkg="${user_pkg##*:}"
+    uid="$(awk -v p="$pkg" '$1==p {print $2}' /data/system/packages.list)"
+    if [ -n "$uid" ]; then
+      UID_LIST="${UID_LIST:+$UID_LIST }$((user * 100000 + uid))"
+    fi
+  done
+  log_safe "🔍 找到 $(echo "$UID_LIST" | wc -w) 个应用"
+}
+
+find_packages_uid
+
 add_global_proxy_rules() {
   ip_cmd="${1:-iptables}"
   $ip_cmd -t mangle -A "$CHAIN_OUT" -p tcp -j MARK --set-xmark "$MARK_HEX"
@@ -97,39 +112,28 @@ add_global_proxy_rules() {
 
 add_blacklist_rules() {
   ip_cmd="${1:-iptables}"
-  for app_pkg in $APP_PACKAGES; do
-    uid=$(dumpsys package "$app_pkg" 2>/dev/null | grep 'userId=' | cut -d'=' -f2)
-    if [ -n "$uid" ]; then
-      log_safe "⚫ 黑名单放行: $app_pkg ($uid)"
-      $ip_cmd -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$uid" -j RETURN
-    fi
+  for uid in $UID_LIST; do
+    log_safe "⚫ 黑名单放行: ($uid)"
+    $ip_cmd -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$uid" -j RETURN
   done
   add_global_proxy_rules "$ip_cmd"
 }
 
 add_whitelist_rules() {
   ip_cmd="${1:-iptables}"
-  if [ -z "$APP_PACKAGES" ]; then
+  if [ -z "$UID_LIST" ]; then
     log_safe "❗ 白名单为空, 将仅代理本机 DNS 流量"
     return
   fi
-  for app_pkg in $APP_PACKAGES; do
-    uid=$(dumpsys package "$app_pkg" 2>/dev/null | grep 'userId=' | cut -d'=' -f2)
-    if [ -n "$uid" ]; then
-      log_safe "⚪ 白名单代理: $app_pkg ($uid)"
-      $ip_cmd -t mangle -A "$CHAIN_OUT" -p tcp -m owner --uid-owner "$uid" -j MARK --set-xmark "$MARK_HEX"
-      $ip_cmd -t mangle -A "$CHAIN_OUT" -p udp -m owner --uid-owner "$uid" -j MARK --set-xmark "$MARK_HEX"
-    fi
+  for uid in $UID_LIST; do
+    log_safe "⚪ 白名单代理: ($uid)"
+    $ip_cmd -t mangle -A "$CHAIN_OUT" -p tcp -m owner --uid-owner "$uid" -j MARK --set-xmark "$MARK_HEX"
+    $ip_cmd -t mangle -A "$CHAIN_OUT" -p udp -m owner --uid-owner "$uid" -j MARK --set-xmark "$MARK_HEX"
   done
 }
 
 add_app_rules() {
   ip_cmd="${1:-iptables}"
-  if ! command -v dumpsys >/dev/null 2>&1; then
-    log_safe "❗ dumpsys 不可用, 回退全局模式"
-    add_global_proxy_rules "$ip_cmd"
-    return
-  fi
   case "$PROXY_MODE" in
   whitelist) add_whitelist_rules "$ip_cmd" ;;
   blacklist) add_blacklist_rules "$ip_cmd" ;;
@@ -177,8 +181,7 @@ add_tproxy_rules() {
 
       $ip_cmd -t nat -N CLASH_DNS_OUT 2>/dev/null || true
       $ip_cmd -t nat -F CLASH_DNS_OUT
-      $ip_cmd -t nat -A CLASH_DNS_OUT -m owner --uid-owner "$USER_ID" -j RETURN
-      $ip_cmd -t nat -A CLASH_DNS_OUT -m owner --gid-owner "$GROUP_ID" -j RETURN
+      $ip_cmd -t nat -A CLASH_DNS_OUT -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -j RETURN
       $ip_cmd -t nat -A CLASH_DNS_OUT -p tcp --dport 53 -j REDIRECT --to-ports "$CLASH_DNS_PORT"
       $ip_cmd -t nat -A CLASH_DNS_OUT -p udp --dport 53 -j REDIRECT --to-ports "$CLASH_DNS_PORT"
       ensure_hook "$ip_cmd" nat OUTPUT CLASH_DNS_OUT
@@ -199,8 +202,7 @@ add_tproxy_rules() {
   esac
 
   log_safe "👤 $CHAIN_OUT 放行 $TPROXY_USER($USER_ID:$GROUP_ID)..."
-  $ip_cmd -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" -j RETURN
-  $ip_cmd -t mangle -A "$CHAIN_OUT" -m owner --gid-owner "$GROUP_ID" -j RETURN
+  $ip_cmd -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -j RETURN
 
   for chain in $CHAIN_PRE $CHAIN_OUT; do
     for ip in $lan_ips; do
