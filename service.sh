@@ -46,7 +46,7 @@ cleanup() {
 # 确保核心程序存在且可执行如果文件不存在, 且 ENABLE_AUTO_UPDATE=1, 则尝试调用更新脚本来自动下载
 ensure_bin() {
   update="$MODDIR/update-bin.sh"
-  en=$(read_setting "ENABLE_AUTO_UPDATE" "1")
+  en=$(read_setting "ENABLE_AUTO_UPDATE" "true")
   bin_repo=$(read_setting "BIN_REPO" "SagerNet/sing-box")
   release_tag=$(read_setting "BIN_RELEASE" "latest")
 
@@ -71,7 +71,7 @@ ensure_bin() {
   fi
 
   # 如果启用了自动更新, 检查版本
-  if [ "$en" = "1" ]; then
+  if [ "$en" = "true" ]; then
     log_safe "🔄 已启用自动更新, 正在检查版本..."
 
     ver_str=$("$BIN_PATH" version 2>/dev/null | awk '/version/ {sub(/.*version /, ""); sub(/^v/, ""); print $1}')
@@ -190,36 +190,36 @@ start_monitor_if_needed() {
 
 # --- 主逻辑 ---
 case "$1" in
-  stop)
-    log_safe "🛑 服务停止中..."
+stop)
+  log_safe "🛑 服务停止中..."
+  cleanup
+  log_safe "✅ 服务已停止"
+  ;;
+*)
+  log_safe "🚀 服务启动中..."
+  # --- 锁机制: 防止多个实例同时运行 ---
+  [ ! -f "$LOCK_FILE" ] || abort_safe "‼️ 检测到另一个服务实例正在运行, 启动中止"
+  # 1. 创建锁文件, 并设置 trap 以确保在脚本退出时自动删除
+  touch "$LOCK_FILE"
+  trap 'rm -f "$LOCK_FILE"; log_safe "🔓 锁已释放"' EXIT HUP INT QUIT TERM
+  # 2. 执行清理, 确保一个干净的启动环境
+  cleanup
+  # 3. 确保核心程序存在
+  ensure_bin || abort_safe "❌ 代理核心不可用, 启动中止"
+  # 4. 启动代理核心
+  start_bin || {
     cleanup
-    log_safe "✅ 服务已停止"
-    ;;
-  *)
-    log_safe "🚀 服务启动中..."
-    # --- 锁机制: 防止多个实例同时运行 ---
-    [ ! -f "$LOCK_FILE" ] || abort_safe "‼️ 检测到另一个服务实例正在运行, 启动中止"
-    # 1. 创建锁文件, 并设置 trap 以确保在脚本退出时自动删除
-    touch "$LOCK_FILE"
-    trap 'rm -f "$LOCK_FILE"; log_safe "🔓 锁已释放"' EXIT HUP INT QUIT TERM
-    # 2. 执行清理, 确保一个干净的启动环境
+    abort_safe "❌ 代理核心启动失败, 启动中止"
+  }
+  # 5. 应用防火墙规则
+  apply_rules || {
     cleanup
-    # 3. 确保核心程序存在
-    ensure_bin || abort_safe "❌ 代理核心不可用, 启动中止"
-    # 4. 启动代理核心
-    start_bin || {
-      cleanup
-      abort_safe "❌ 代理核心启动失败, 启动中止"
-    }
-    # 5. 应用防火墙规则
-    apply_rules || {
-      cleanup
-      abort_safe "❌ 防火墙规则应用失败, 启动中止"
-    }
-    # 6. 启动可选的辅助脚本
-    start_monitor_if_needed
-    log_safe "✅ 服务启动完成"
-    ;;
+    abort_safe "❌ 防火墙规则应用失败, 启动中止"
+  }
+  # 6. 启动可选的辅助脚本
+  start_monitor_if_needed
+  log_safe "✅ 服务启动完成"
+  ;;
 esac
 
 update_desc

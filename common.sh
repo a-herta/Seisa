@@ -18,9 +18,9 @@ read_setting() {
     return
   }
 
-  val=$(grep -m1 -E "^[[:space:]]*$1=" "$f" 2>/dev/null \
-    | sed -E "s/^[[:space:]]*$1=[[:space:]]*//" \
-    | sed -E 's/[[:space:]]+$//')
+  val=$(grep -m1 -E "^[[:space:]]*$1=" "$f" 2>/dev/null |
+    sed -E "s/^[[:space:]]*$1=[[:space:]]*//" |
+    sed -E 's/[[:space:]]+$//')
 
   [ -n "$val" ] && echo "$val" || echo "$2"
 }
@@ -79,6 +79,7 @@ log_safe() {
   if [ "$IS_INSTALLER_ENV" = "1" ]; then
     ui_print "$ts $msg"
   else
+    echo "$ts $msg"
     if [ -n "$LOGFILE" ]; then
       mkdir -p "$(dirname -- "$LOGFILE")" 2>/dev/null
       printf '%s %s\n' "$ts" "$msg" >>"$LOGFILE"
@@ -126,19 +127,19 @@ resolve_user_group() {
   input="$1"
 
   case "$input" in
-    *:*) user=${input%%:*} group=${input##*:} ;;
-    *) user=$input group="" ;;
+  *:*) user=${input%%:*} group=${input##*:} ;;
+  *) user=$input group="" ;;
   esac
 
   case "$user" in
-    *[!0-9]*) uid=$(id -u "$user" 2>/dev/null) ;;
-    *) uid=$user ;;
+  *[!0-9]*) uid=$(id -u "$user" 2>/dev/null) ;;
+  *) uid=$user ;;
   esac
 
   if [ -n "$group" ]; then
     case "$group" in
-      *[!0-9]*) gid=$(id -g "$group" 2>/dev/null) ;;
-      *) gid=$group ;;
+    *[!0-9]*) gid=$(id -g "$group" 2>/dev/null) ;;
+    *) gid=$group ;;
     esac
   fi
 
