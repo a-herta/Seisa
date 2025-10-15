@@ -102,7 +102,7 @@ abort_safe() {
 
 # --- 模块状态更新 ---
 update_desc() {
-  if [ -n "$1" ]; then icon="$1"; elif [ -f "$PIDFILE" ]; then icon="✅"; else icon="⛔"; fi
+  icon="${1:-⛔}"
   prop="$MODDIR/module.prop"
   tmp="${prop}.new.$$"
 

@@ -187,6 +187,7 @@ case "$1" in
 stop)
   log_safe "🛑 服务停止中..."
   cleanup
+  update_desc "⛔"
   log_safe "✅ 服务已停止"
   ;;
 *)
@@ -212,8 +213,7 @@ stop)
   }
   # 6. 启动可选的辅助脚本
   start_monitor_if_needed
+  update_desc "✅"
   log_safe "🎉 服务启动完成"
   ;;
 esac
-
-update_desc
