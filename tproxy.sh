@@ -105,7 +105,7 @@ find_packages_uid
 
 add_global_proxy_rules() {
   ip_cmd="${1:-iptables}"
-  log_safe "🎯 全局代理: TCP/UDP"
+  log_safe "🎯 $CHAIN_OUT MARK 剩余流量 到 策略路由 $MARK_HEX"
   $ip_cmd -t mangle -A "$CHAIN_OUT" -p tcp -j MARK --set-xmark "$MARK_HEX"
   $ip_cmd -t mangle -A "$CHAIN_OUT" -p udp -j MARK --set-xmark "$MARK_HEX"
 }
@@ -113,7 +113,7 @@ add_global_proxy_rules() {
 add_blacklist_rules() {
   ip_cmd="${1:-iptables}"
   for uid in $UID_LIST; do
-    log_safe "⚫ 黑名单放行: ($uid)"
+    log_safe "⚫ $CHAIN_OUT 忽略程序黑名单: ($uid)"
     $ip_cmd -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$uid" -j RETURN
   done
   add_global_proxy_rules "$ip_cmd"
@@ -122,11 +122,11 @@ add_blacklist_rules() {
 add_whitelist_rules() {
   ip_cmd="${1:-iptables}"
   if [ -z "$UID_LIST" ]; then
-    log_safe "⭕ 白名单为空, 将仅代理本机 DNS 流量"
+    log_safe "⭕ $CHAIN_OUT 白名单为空, 将仅代理本机 DNS 流量"
     return
   fi
   for uid in $UID_LIST; do
-    log_safe "⚪ 白名单代理: ($uid)"
+    log_safe "⚪ $CHAIN_OUT 标记程序白名单: ($uid)"
     $ip_cmd -t mangle -A "$CHAIN_OUT" -p tcp -m owner --uid-owner "$uid" -j MARK --set-xmark "$MARK_HEX"
     $ip_cmd -t mangle -A "$CHAIN_OUT" -p udp -m owner --uid-owner "$uid" -j MARK --set-xmark "$MARK_HEX"
   done
@@ -167,19 +167,19 @@ add_tproxy_rules() {
     $ip_cmd -t mangle -F "$chain"
   done
 
-  log_safe "⭕ 忽略来自 lo 且未标记的流量"
+  log_safe "⭕ $CHAIN_PRE 忽略来自 lo 且未标记的流量"
   $ip_cmd -t mangle -A "$CHAIN_PRE" -i lo -m mark --mark 0/1 -j RETURN
 
   $ip_cmd -t mangle -A DIVERT -j MARK --set-xmark "$MARK_HEX"
   $ip_cmd -t mangle -A DIVERT -j ACCEPT
   $ip_cmd -t mangle -I PREROUTING 1 -p tcp -m socket --transparent -j DIVERT
 
-  log_safe "📢 $CHAIN_OUT 放行 $TPROXY_USER($USER_ID:$GROUP_ID)..."
+  log_safe "📢 $CHAIN_OUT 忽略程序 $TPROXY_USER($USER_ID:$GROUP_ID)..."
   $ip_cmd -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -j RETURN
 
   for chain in $CHAIN_PRE $CHAIN_OUT; do
     for ip in $lan_ips; do
-      log_safe "🚩 $chain 放行内网 ($ip)..."
+      log_safe "🚩 $chain 忽略内网 ($ip)..."
       $ip_cmd -t mangle -A "$chain" -d "$ip" -j RETURN
     done
   done
@@ -189,10 +189,9 @@ add_tproxy_rules() {
     $ip_cmd -t mangle -A "$CHAIN_OUT" -o "$ignore" -j RETURN
   done
 
-  # DNS: sing-box => mangle/TPROXY; clash/mihomo/hysteria => nat/REDIRECT
   case $BIN_NAME in
   clash | mihomo | hysteria)
-    log_safe "🚥 DNS 走 nat 重定向到 $CLASH_DNS_PORT"
+    log_safe "🚥 DNS 走 nat REDIRECT 到 $CLASH_DNS_PORT"
     if $ip_cmd -t nat -nL >/dev/null 2>&1; then
       $ip_cmd -t nat -N CLASH_DNS_PRE 2>/dev/null || true
       $ip_cmd -t nat -F CLASH_DNS_PRE
@@ -215,6 +214,7 @@ add_tproxy_rules() {
     fi
     ;;
   *)
+    log_safe "🚥 DNS 走 mangle TPROXY 到 $TPROXY_PORT"
     $ip_cmd -t mangle -A "$CHAIN_PRE" -p tcp --dport 53 -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
     $ip_cmd -t mangle -A "$CHAIN_PRE" -p udp --dport 53 -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
     $ip_cmd -t mangle -A "$CHAIN_OUT" -p tcp --dport 53 -j MARK --set-xmark "$MARK_HEX"
@@ -222,25 +222,28 @@ add_tproxy_rules() {
     ;;
   esac
 
-  log_safe "🔄 路由所有剩余流量到 TPROXY..."
+  log_safe "🔄 $CHAIN_PRE TPROXY 所有剩余流量到 $TPROXY_PORT..."
   $ip_cmd -t mangle -A "$CHAIN_PRE" -p tcp -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
   $ip_cmd -t mangle -A "$CHAIN_PRE" -p udp -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
 
   add_app_rules "$ip_cmd"
 
+  log_safe "💉 $CHAIN_PRE 挂接至 PREROUTING"
   ensure_hook "$ip_cmd" mangle PREROUTING "$CHAIN_PRE"
+
+  log_safe "💉 $CHAIN_OUT 挂接至 OUTPUT"
   ensure_hook "$ip_cmd" mangle OUTPUT "$CHAIN_OUT"
 
   # Self-protection: block local service hitting tproxy port (TCP+UDP)
-  log_safe "⛔ 阻止本地服务访问 tproxy 端口 $TPROXY_PORT"
+  log_safe "⛔ OUTPUT 阻止本地服务访问 $TPROXY_PORT"
   $ip_cmd -A OUTPUT -d "$local_ip" -p tcp --dport "$TPROXY_PORT" -j REJECT
   $ip_cmd -A OUTPUT -d "$local_ip" -p udp --dport "$TPROXY_PORT" -j REJECT
 
   # FakeIP ICMP fix (if nat available)
   if $ip_cmd -t nat -nL >/dev/null 2>&1 && [ "$FAKEIP_ICMP_FIX" = "true" ]; then
-    log_safe "👻 修复 FakeIP($fire) ICMP"
-    $ip_cmd -t nat -A OUTPUT -d "$fire" -p $proto_icmp -j DNAT --to-destination "$local_ip"
-    $ip_cmd -t nat -A PREROUTING -d "$fire" -p $proto_icmp -j DNAT --to-destination "$local_ip"
+    log_safe "👻 PREROUTING & OUTPUT 修复 FakeIP($fire) ICMP"
+    $ip_cmd -t nat -A OUTPUT -d "$fire" -p "$proto_icmp" -j DNAT --to-destination "$local_ip"
+    $ip_cmd -t nat -A PREROUTING -d "$fire" -p "$proto_icmp" -j DNAT --to-destination "$local_ip"
   fi
 }
 
@@ -263,32 +266,36 @@ remove_tproxy_rules() {
 
   log_safe "🧹 删除 $ip_cmd 规则..."
 
+  log_safe "💉 移除自定义链挂接策略"
   $ip_cmd -t mangle -D PREROUTING -j "$CHAIN_PRE" 2>/dev/null || true
   $ip_cmd -t mangle -D OUTPUT -j "$CHAIN_OUT" 2>/dev/null || true
   $ip_cmd -t mangle -D PREROUTING 1 -p tcp -m socket --transparent -j DIVERT 2>/dev/null || true
 
   for chain in $CUSTOM_CHAIN; do
+    log_safe "🔗 移除自定义 $chain 链"
     $ip_cmd -t mangle -F "$chain" 2>/dev/null || true
     $ip_cmd -t mangle -X "$chain" 2>/dev/null || true
   done
 
-  # Remove self-protection rejects
+  log_safe "⛔ 移除 OUTPUT 阻止本地服务策略"
   $ip_cmd -D OUTPUT -d "$local_ip" -p tcp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || true
   $ip_cmd -D OUTPUT -d "$local_ip" -p udp --dport "$TPROXY_PORT" -j REJECT 2>/dev/null || true
 
-  # nat DNS and FakeIP ICMP cleanup
   if $ip_cmd -t nat -nL >/dev/null 2>&1; then
+    log_safe "💉 移除 CLASH_DNS 挂接策略"
     $ip_cmd -t nat -D OUTPUT -j CLASH_DNS_OUT 2>/dev/null || true
     $ip_cmd -t nat -D PREROUTING -j CLASH_DNS_PRE 2>/dev/null || true
 
     for chain in CLASH_DNS_PRE CLASH_DNS_OUT; do
+      log_safe "🔗 移除 CLASH_DNS 自定义 $chain 链"
       $ip_cmd -t mangle -F "$chain" 2>/dev/null || true
       $ip_cmd -t mangle -X "$chain" 2>/dev/null || true
     done
 
     if [ "$FAKEIP_ICMP_FIX" = "true" ]; then
-      $ip_cmd -t nat -D OUTPUT -d "$fire" -p $proto_icmp -j DNAT --to-destination "$local_ip"
-      $ip_cmd -t nat -D PREROUTING -d "$fire" -p $proto_icmp -j DNAT --to-destination "$local_ip"
+      log_safe "👻 移除 PREROUTING & OUTPUT 修复 FakeIP ICMP 策略"
+      $ip_cmd -t nat -D OUTPUT -d "$fire" -p "$proto_icmp" -j DNAT --to-destination "$local_ip"
+      $ip_cmd -t nat -D PREROUTING -d "$fire" -p "$proto_icmp" -j DNAT --to-destination "$local_ip"
     fi
   fi
 }
