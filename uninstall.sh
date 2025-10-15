@@ -30,3 +30,5 @@ fi
 log_safe "✅ 卸载清理完毕"
 
 rm -rf "$PERSIST_DIR"
+
+exit 0

@@ -63,3 +63,5 @@ if [ -f "$MODPATH/$BIN_NAME" ]; then
 fi
 
 log_safe "✨ 安装完成, 请修改配置并重启设备"
+
+exit 0

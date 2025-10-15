@@ -22,3 +22,5 @@ else
   sh "$SERVICE" >/dev/null 2>&1 || log_safe "❓ 代理服务启动失败"
   log_safe "✅ 代理服务启动成功"
 fi
+
+exit 0

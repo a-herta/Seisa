@@ -171,6 +171,21 @@ add_tproxy_rules() {
   $ip_cmd -t mangle -A DIVERT -j ACCEPT
   $ip_cmd -t mangle -I PREROUTING 1 -p tcp -m socket --transparent -j DIVERT
 
+  log_safe "📢 $CHAIN_OUT 放行 $TPROXY_USER($USER_ID:$GROUP_ID)..."
+  $ip_cmd -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -j RETURN
+
+  for chain in $CHAIN_PRE $CHAIN_OUT; do
+    for ip in $lan_ips; do
+      log_safe "🚩 $chain 放行内网 ($ip)..."
+      $ip_cmd -t mangle -A "$chain" -d "$ip" -j RETURN
+    done
+  done
+
+  for ignore in $IGNORE_LIST; do
+    log_safe "🎈 $CHAIN_OUT 忽略接口 ($ignore)..."
+    $ip_cmd -t mangle -A "$CHAIN_OUT" -o "$ignore" -j RETURN
+  done
+
   # DNS: sing-box => mangle/TPROXY; clash/mihomo/hysteria => nat/REDIRECT
   case $BIN_NAME in
   clash | mihomo | hysteria)
@@ -203,21 +218,6 @@ add_tproxy_rules() {
     $ip_cmd -t mangle -A "$CHAIN_OUT" -p udp --dport 53 -j MARK --set-xmark "$MARK_HEX"
     ;;
   esac
-
-  log_safe "📢 $CHAIN_OUT 放行 $TPROXY_USER($USER_ID:$GROUP_ID)..."
-  $ip_cmd -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -j RETURN
-
-  for chain in $CHAIN_PRE $CHAIN_OUT; do
-    for ip in $lan_ips; do
-      log_safe "🚩 $chain 放行内网 ($ip)..."
-      $ip_cmd -t mangle -A "$chain" -d "$ip" -j RETURN
-    done
-  done
-
-  for ignore in $IGNORE_LIST; do
-    log_safe "🎈 $CHAIN_OUT 忽略接口 ($ignore)..."
-    $ip_cmd -t mangle -A "$CHAIN_OUT" -o "$ignore" -j RETURN
-  done
 
   log_safe "🔄 路由所有剩余流量到 TPROXY..."
   $ip_cmd -t mangle -A "$CHAIN_PRE" -p tcp -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
