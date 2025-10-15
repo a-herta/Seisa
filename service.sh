@@ -8,18 +8,16 @@ set -e
 MODDIR=$(dirname "$0")
 . "$MODDIR/common.sh"
 
-log_safe "❤️ === [service] ==="
+log_safe "✨ === [service] ==="
 
 # --- 函数定义 ---
 
-# cleanup
 # 停止核心进程, 并清理所有相关的防火墙规则这是模块停止或重启前的必要步骤
 cleanup() {
   log_safe "🧹 清理残留服务进程..."
 
   if [ -x "$TPROXY" ]; then
-    log_safe "🔥 调用防火墙规则清理..."
-    sh "$TPROXY" stop >/dev/null 2>&1 || log_safe "❌ 防火墙规则清理失败"
+    sh "$TPROXY" stop >/dev/null 2>&1 || log_safe "❓ 防火墙规则清理失败"
   fi
 
   if [ -f "$PIDFILE" ]; then
@@ -42,7 +40,6 @@ cleanup() {
   log_safe "✨ 残留服务清理完成"
 }
 
-# ensure_bin
 # 确保核心程序存在且可执行如果文件不存在, 且 ENABLE_AUTO_UPDATE=1, 则尝试调用更新脚本来自动下载
 ensure_bin() {
   update="$MODDIR/update-bin.sh"
@@ -62,7 +59,7 @@ ensure_bin() {
   # 如果核心不存在, 必须执行更新
   if [ ! -x "$BIN_PATH" ]; then
     log_safe "❗ 代理核心不存在, 尝试自动下载..."
-    sh "$update" "$bin_repo" "$release_tag" >/dev/null 2>&1 || log_safe "❌ 自动更新执行失败"
+    sh "$update" "$bin_repo" "$release_tag" >/dev/null 2>&1 || log_safe "❓ 自动更新执行失败"
     if [ ! -x "$BIN_PATH" ]; then
       log_safe "❌ 下载代理核心出错"
       return 1
@@ -85,7 +82,7 @@ ensure_bin() {
     if [ -n "$latest_tag" ]; then
       if [ "$latest_tag" != "$current_ver" ]; then
         log_safe "💡 发现新版本, 开始更新..."
-        sh "$update" "$bin_repo" >/dev/null 2>&1 || log_safe "❌ 自动更新执行失败"
+        sh "$update" "$bin_repo" >/dev/null 2>&1 || log_safe "❓ 自动更新执行失败"
       fi
     else
       log_safe "❌ 获取新版本失败"
@@ -93,20 +90,19 @@ ensure_bin() {
   fi
 
   if [ ! -x "$BIN_PATH" ]; then
-    log_safe "❌ 代理核心未找到, $(basename "$BIN_PATH")"
+    log_safe "❌ 代理核心未找到"
     return 1
   fi
   return 0
 }
 
-# start_bin
 # 在后台启动代理核心进程并等待初始化完成
 start_bin() {
   if [ ! -f "$BIN_CONF" ]; then
-    log_safe "❌ 配置文件未找到: $(basename "$BIN_CONF")"
+    log_safe "❌ 核心配置文件未找到"
     return 1
   fi
-  log_safe "🚀 正在启动核心进程..."
+  log_safe "🚀 启动代理核心..."
 
   # 清空旧的日志文件
   : >"$BIN_LOG"
@@ -151,40 +147,38 @@ start_bin() {
   return 1
 }
 
-# apply_rules
 # 应用防火墙规则, 以便将流量转发给核心进程
 apply_rules() {
   if [ -x "$TPROXY" ]; then
-    log_safe "🔥 正在调用防火墙规则..."
+    log_safe "🔥 正在应用网络规则..."
     sh "$TPROXY" >/dev/null 2>&1 || {
-      log_safe "❌ 防火墙规则调用失败"
+      log_safe "❓ 网络规则应用失败"
       return 1
     }
   else
-    log_safe "❌ 防火墙规则未找到, 请重新安装模块"
+    log_safe "❌ 网络规则未找到, 请重新安装模块"
     return 1
   fi
 }
 
-# start_monitor_if_needed
 # 根据模块配置, 决定是否启动守护进程
 start_monitor_if_needed() {
-  en=$(read_setting "ENABLE_MONITOR" "0")
+  en=$(read_setting "ENABLE_MONITOR" "true")
 
-  if [ "$en" = "1" ]; then
+  if [ "$en" = "true" ]; then
     # 检查进程是否已在运行
     if ! pgrep -f "$(basename "$MONITOR")" >/dev/null; then
       if [ -x "$MONITOR" ]; then
-        log_safe "👁️ 正在启动守护进程..."
+        log_safe "🚀 启动监控守护..."
         bg_run "$MONITOR"
       else
-        log_safe "❗ 守护进程脚本未找到, 跳过启动"
+        log_safe "❗ 监控守护未找到, 跳过启动"
       fi
     else
-      log_safe "❗ 守护进程已在运行"
+      log_safe "❗ 监控守护已在运行"
     fi
   else
-    log_safe "🚫 根据配置, 守护进程已被禁用"
+    log_safe "🚫 根据配置, 监控守护已被禁用"
   fi
 }
 
@@ -198,27 +192,27 @@ stop)
 *)
   log_safe "🚀 服务启动中..."
   # --- 锁机制: 防止多个实例同时运行 ---
-  [ ! -f "$LOCK_FILE" ] || abort_safe "‼️ 检测到另一个服务实例正在运行, 启动中止"
+  [ ! -f "$LOCK_FILE" ] || abort_safe "❗ 检测到另一个服务实例正在运行, 启动中止"
   # 1. 创建锁文件, 并设置 trap 以确保在脚本退出时自动删除
   touch "$LOCK_FILE"
   trap 'rm -f "$LOCK_FILE"; log_safe "🔓 锁已释放"' EXIT HUP INT QUIT TERM
   # 2. 执行清理, 确保一个干净的启动环境
   cleanup
   # 3. 确保核心程序存在
-  ensure_bin || abort_safe "❌ 代理核心不可用, 启动中止"
+  ensure_bin || abort_safe "🚫 代理核心不可用, 启动中止"
   # 4. 启动代理核心
   start_bin || {
     cleanup
-    abort_safe "❌ 代理核心启动失败, 启动中止"
+    abort_safe "🚫 代理核心启动失败, 启动中止"
   }
   # 5. 应用防火墙规则
   apply_rules || {
     cleanup
-    abort_safe "❌ 防火墙规则应用失败, 启动中止"
+    abort_safe "🚫 防火墙规则应用失败, 启动中止"
   }
   # 6. 启动可选的辅助脚本
   start_monitor_if_needed
-  log_safe "✅ 服务启动完成"
+  log_safe "🎉 服务启动完成"
   ;;
 esac
 

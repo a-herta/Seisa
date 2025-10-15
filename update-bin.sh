@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # =====================================================================
-# ⬇️ update-bin.sh - 核心程序自动更新脚本
+# 📥 update-bin.sh - 核心程序自动更新脚本
 # =====================================================================
 
 set -e
@@ -21,19 +21,19 @@ if [ -z "$TMPDIR" ]; then
 fi
 API_URL_BASE="https://api.github.com/repos/${BIN_REPO}/releases"
 
-log_safe "❤️ === [update-bin] ==="
+log_safe "✨ === [update-bin] ==="
 log_safe "🚀 开始更新代理核心..."
 
 # 架构检测
 case $(getprop ro.product.cpu.abi) in
-  arm64-v8a) ARCHITECTURE="android-arm64" ;;
-  armeabi-v7a) ARCHITECTURE="android-armv7" ;;
-  x86_64) ARCHITECTURE="android-amd64" ;;
-  x86) ARCHITECTURE="android-386" ;;
-  *)
-    ARCHITECTURE=""
-    log_safe "🤔 未知CPU架构, 使用通用匹配"
-    ;;
+arm64-v8a) ARCHITECTURE="android-arm64" ;;
+armeabi-v7a) ARCHITECTURE="android-armv7" ;;
+x86_64) ARCHITECTURE="android-amd64" ;;
+x86) ARCHITECTURE="android-386" ;;
+*)
+  ARCHITECTURE=""
+  log_safe "🤔 未知CPU架构, 使用通用匹配"
+  ;;
 esac
 log_safe "💻 检测到 CPU 架构: ${ARCHITECTURE:-未知}"
 

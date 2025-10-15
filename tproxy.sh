@@ -20,9 +20,8 @@ CUSTOM_CHAIN=${CUSTOM_CHAIN:-"DIVERT $CHAIN_PRE $CHAIN_OUT"}
 INTRANET4=${INTRANET4:-"10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 224.0.0.0/4 240.0.0.0/4"}
 INTRANET6=${INTRANET6:-"::1/128 fe80::/10 fc00::/7 ff00::/8"}
 
-IFACES_LIST="${IFACES_LIST:-"lo wlan+ ap+ rndis+ ncm+"}"
-IGNORE_LIST="${IGNORE_LIST:-""}"
 UID_LIST="${UID_LIST:-""}"
+IGNORE_LIST="${IGNORE_LIST:-""}"
 
 FAIR4=${FAIR4:-"198.18.0.0/15"}
 FAIR6=${FAIR6:-"fc00::/18"}
@@ -33,7 +32,7 @@ CLASH_DNS_PORT=${CLASH_DNS_PORT:-"1053"}
 IPV6_SUPPORT=${IPV6_SUPPORT:-"true"}
 PROXY_MODE=${PROXY_MODE:-"$(read_setting "PROXY_MODE" "blacklist")"}
 
-log_safe "❤️ === [tproxy] ==="
+log_safe "✨ === [tproxy] ==="
 
 read -r USER_ID GROUP_ID <<EOF
 $(resolve_user_group "$TPROXY_USER")
@@ -47,9 +46,9 @@ detect_tproxy_params() {
     t_port="$(grep -A 3 '"type": "tproxy"' "$BIN_CONF" | grep -m1 '"listen_port"' | tr -cd '0-9' || true)"
   fi
 
-  [ -n "$fair4" ] && FAIR4="$fair4" && log_safe "🕹️ FakeIP v4: $FAIR4"
-  [ -n "$fair6" ] && FAIR6="$fair6" && log_safe "🕹️ FakeIP v6: $FAIR6"
-  [ -n "$t_port" ] && TPROXY_PORT="$t_port" && log_safe "🕹️ TProxy port: $TPROXY_PORT"
+  [ -n "$fair4" ] && FAIR4="$fair4" && log_safe "📌 FakeIP v4: $FAIR4"
+  [ -n "$fair6" ] && FAIR6="$fair6" && log_safe "📌 FakeIP v6: $FAIR6"
+  [ -n "$t_port" ] && TPROXY_PORT="$t_port" && log_safe "📌 TProxy port: $TPROXY_PORT"
 }
 
 detect_tproxy_params
@@ -106,6 +105,7 @@ find_packages_uid
 
 add_global_proxy_rules() {
   ip_cmd="${1:-iptables}"
+  log_safe "🎯 全局代理: TCP/UDP"
   $ip_cmd -t mangle -A "$CHAIN_OUT" -p tcp -j MARK --set-xmark "$MARK_HEX"
   $ip_cmd -t mangle -A "$CHAIN_OUT" -p udp -j MARK --set-xmark "$MARK_HEX"
 }
@@ -122,7 +122,7 @@ add_blacklist_rules() {
 add_whitelist_rules() {
   ip_cmd="${1:-iptables}"
   if [ -z "$UID_LIST" ]; then
-    log_safe "❗ 白名单为空, 将仅代理本机 DNS 流量"
+    log_safe "⭕ 白名单为空, 将仅代理本机 DNS 流量"
     return
   fi
   for uid in $UID_LIST; do
@@ -164,6 +164,9 @@ add_tproxy_rules() {
     $ip_cmd -t mangle -F "$chain"
   done
 
+  log_safe "⭕ 忽略来自 lo 且未标记的流量"
+  $ip_cmd -t mangle -A "$CHAIN_PRE" -i lo -m mark --mark 0/1 -j RETURN
+
   $ip_cmd -t mangle -A DIVERT -j MARK --set-xmark "$MARK_HEX"
   $ip_cmd -t mangle -A DIVERT -j ACCEPT
   $ip_cmd -t mangle -I PREROUTING 1 -p tcp -m socket --transparent -j DIVERT
@@ -171,7 +174,7 @@ add_tproxy_rules() {
   # DNS: sing-box => mangle/TPROXY; clash/mihomo/hysteria => nat/REDIRECT
   case $BIN_NAME in
   clash | mihomo | hysteria)
-    log_safe "🚦 DNS 走 nat 重定向到 $CLASH_DNS_PORT"
+    log_safe "🚥 DNS 走 nat 重定向到 $CLASH_DNS_PORT"
     if $ip_cmd -t nat -nL >/dev/null 2>&1; then
       $ip_cmd -t nat -N CLASH_DNS_PRE 2>/dev/null || true
       $ip_cmd -t nat -F CLASH_DNS_PRE
@@ -201,32 +204,32 @@ add_tproxy_rules() {
     ;;
   esac
 
-  log_safe "👤 $CHAIN_OUT 放行 $TPROXY_USER($USER_ID:$GROUP_ID)..."
+  log_safe "📢 $CHAIN_OUT 放行 $TPROXY_USER($USER_ID:$GROUP_ID)..."
   $ip_cmd -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -j RETURN
 
   for chain in $CHAIN_PRE $CHAIN_OUT; do
     for ip in $lan_ips; do
-      log_safe "🚦 $chain 放行内网 ($ip)..."
+      log_safe "🚩 $chain 放行内网 ($ip)..."
       $ip_cmd -t mangle -A "$chain" -d "$ip" -j RETURN
     done
   done
 
-  for iface in $IFACES_LIST; do
-    log_safe "🔄 $CHAIN_PRE 路由接口 ($iface)..."
-    $ip_cmd -t mangle -A "$CHAIN_PRE" -p tcp -i "$iface" -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
-    $ip_cmd -t mangle -A "$CHAIN_PRE" -p udp -i "$iface" -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
-  done
   for ignore in $IGNORE_LIST; do
-    log_safe " $CHAIN_OUT 忽略接口 ($ignore)..."
+    log_safe "🎈 $CHAIN_OUT 忽略接口 ($ignore)..."
     $ip_cmd -t mangle -A "$CHAIN_OUT" -o "$ignore" -j RETURN
   done
+
+  log_safe "🔄 路由所有剩余流量到 TPROXY..."
+  $ip_cmd -t mangle -A "$CHAIN_PRE" -p tcp -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
+  $ip_cmd -t mangle -A "$CHAIN_PRE" -p udp -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
+
   add_app_rules "$ip_cmd"
 
   ensure_hook "$ip_cmd" mangle PREROUTING "$CHAIN_PRE"
   ensure_hook "$ip_cmd" mangle OUTPUT "$CHAIN_OUT"
 
   # Self-protection: block local service hitting tproxy port (TCP+UDP)
-  log_safe "🛡️ 阻止本地服务访问 tproxy 端口 $TPROXY_PORT"
+  log_safe "⛔ 阻止本地服务访问 tproxy 端口 $TPROXY_PORT"
   $ip_cmd -A OUTPUT -d "$local_ip" -p tcp --dport "$TPROXY_PORT" -j REJECT
   $ip_cmd -A OUTPUT -d "$local_ip" -p udp --dport "$TPROXY_PORT" -j REJECT
 
@@ -287,17 +290,17 @@ remove_tproxy_rules() {
 # --- Entrypoint -------------------------------------------------------------
 case "$1" in
 stop)
-  log_safe "🛑 清除防火墙规则..."
+  log_safe "🛑 清除网络规则..."
   remove_tproxy_rules iptables
   [ "$IPV6_SUPPORT" = "true" ] && remove_tproxy_rules ip6tables
   unset_routes
-  log_safe "✅ 完成"
+  log_safe "✅ 规则已清除"
   ;;
 *)
-  log_safe "🚀 应用防火墙规则..."
+  log_safe "🚀 应用网络规则..."
   setup_routes
   add_tproxy_rules iptables
   [ "$IPV6_SUPPORT" = "true" ] && add_tproxy_rules ip6tables
-  log_safe "✅ 完成"
+  log_safe "✅ 规则已应用"
   ;;
 esac
