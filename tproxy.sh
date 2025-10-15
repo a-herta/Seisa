@@ -29,7 +29,7 @@ FAIR6=${FAIR6:-"fc00::/18"}
 TPROXY_PORT=${TPROXY_PORT:-"1536"}
 CLASH_DNS_PORT=${CLASH_DNS_PORT:-"1053"}
 
-IPV6_SUPPORT=${IPV6_SUPPORT:-"true"}
+IPV6_SUPPORT=${IPV6_SUPPORT:-"$(read_setting "IPV6_SUPPORT" "true")"}
 PROXY_MODE=${PROXY_MODE:-"$(read_setting "PROXY_MODE" "blacklist")"}
 
 log_safe "✨ === [tproxy] ==="
@@ -146,17 +146,20 @@ add_tproxy_rules() {
   ip_cmd="${1:-iptables}"
   log_safe "🎫 添加 $ip_cmd 规则..."
 
-  if [ "$ip_cmd" = "iptables" ]; then
+  case "$ip_cmd" in
+  iptables*)
     local_ip="127.0.0.1"
     fire="$FAIR4"
     proto_icmp="icmp"
     lan_ips="${INTRANET4:+$INTRANET4 }$(ip -4 a | awk '/inet/ {print $2}' | grep -vE "^127.0.0.1")"
-  else
+    ;;
+  ip6tables*)
     local_ip="::1"
     fire="$FAIR6"
     proto_icmp="icmpv6"
     lan_ips="${INTRANET6:+$INTRANET6 }$(ip -6 a | awk '/inet6/ {print $2}' | grep -vE "^fe80|^::1")"
-  fi
+    ;;
+  esac
 
   for chain in $CUSTOM_CHAIN; do
     log_safe "🔗 创建自定义 $chain 链..."
@@ -245,15 +248,18 @@ add_tproxy_rules() {
 remove_tproxy_rules() {
   ip_cmd="${1:-iptables}"
 
-  if [ "$ip_cmd" = "iptables" ]; then
+  case "$ip_cmd" in
+  iptables*)
     local_ip="127.0.0.1"
     fire="$FAIR4"
     proto_icmp="icmp"
-  else
+    ;;
+  ip6tables*)
     local_ip="::1"
     fire="$FAIR6"
     proto_icmp="icmpv6"
-  fi
+    ;;
+  esac
 
   log_safe "🧹 删除 $ip_cmd 规则..."
 
@@ -291,16 +297,16 @@ remove_tproxy_rules() {
 case "$1" in
 stop)
   log_safe "🛑 清除网络规则..."
-  remove_tproxy_rules iptables
-  [ "$IPV6_SUPPORT" = "true" ] && remove_tproxy_rules ip6tables
+  remove_tproxy_rules "iptables -w 100"
+  [ "$IPV6_SUPPORT" = "true" ] && remove_tproxy_rules "ip6tables -w 100"
   unset_routes
   log_safe "✅ 规则已清除"
   ;;
 *)
   log_safe "🚀 应用网络规则..."
   setup_routes
-  add_tproxy_rules iptables
-  [ "$IPV6_SUPPORT" = "true" ] && add_tproxy_rules ip6tables
+  add_tproxy_rules "iptables -w 100"
+  [ "$IPV6_SUPPORT" = "true" ] && add_tproxy_rules "ip6tables -w 100"
   log_safe "✅ 规则已应用"
   ;;
 esac
