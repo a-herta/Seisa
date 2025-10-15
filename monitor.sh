@@ -15,6 +15,8 @@ RESTARTS_FILE="$PERSIST_DIR/.restart_timestamps"
 
 touch "$RESTARTS_FILE" 2>/dev/null || true
 
+# --- 函数定义 ---
+
 # 获取主 IP 地址的函数
 get_primary_ip() {
   ip route get 8.8.8.8 2>/dev/null | awk '{for(i=1;i<=NF;i++) if ($i=="src") print $(i+1); exit}'
@@ -25,7 +27,25 @@ get_current_ssid() {
   cmd wifi status | grep 'SSID:' | head -n 1 | sed -n 's/.*SSID: \"\([^\"]*\)\".*/\1/p'
 }
 
-log_safe "✨ === [monitor] ==="
+# 记录资源使用情况
+log_resource_usage() {
+  # 检查 PIDFILE 是否存在且有内容
+  if [ -s "$PIDFILE" ]; then
+    pid=$(cat "$PIDFILE")
+    # 检查进程是否存在
+    if kill -0 "$pid" 2>/dev/null; then
+      # 从 /proc/[pid]/status 获取 VmRSS (Resident Set Size)
+      mem_kb=$(grep VmRSS "/proc/$pid/status" | awk '{print $2}')
+      if [ -n "$mem_kb" ] && [ "$mem_kb" -gt 0 ]; then
+        mem_mb=$((mem_kb / 1024))
+        log_safe "💡 当前占用资源: ${mem_mb}MB 内存"
+      fi
+    fi
+  fi
+}
+
+log_safe "✨ === [monitor] === ✨"
+log_safe "🛡️ 监控服务已启动, 检查周期: ${CHECK_INTERVAL} 秒"
 
 # 初始化网络状态
 last_ip=$(get_primary_ip)
@@ -35,12 +55,15 @@ log_safe "🌏 初始网络 IP: ${last_ip:-'未连接'}"
 IGNORE_SSID=$(read_setting "IGNORE_SSID" "")
 [ -n "$IGNORE_SSID" ] && log_safe "🚫 忽略的 SSID: $IGNORE_SSID"
 
-proxy_status="" # 跟踪代理状态: running, stopped, paused
+proxy_status="unknown"
+
+# --- 主循环 ---
 
 while true; do
   sleep "$CHECK_INTERVAL"
+  log_resource_usage
 
-  # 1. 检查是否连接到被忽略的 SSID
+  # 1. 获取当前网络环境
   current_ssid=$(get_current_ssid)
   should_be_paused=false
   if [ -n "$current_ssid" ]; then
