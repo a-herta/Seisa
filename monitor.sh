@@ -38,7 +38,19 @@ log_resource_usage() {
       mem_kb=$(grep VmRSS "/proc/$pid/status" | awk '{print $2}')
       if [ -n "$mem_kb" ] && [ "$mem_kb" -gt 0 ]; then
         mem_mb=$((mem_kb / 1024))
-        log_safe "💡 当前占用资源: ${mem_mb}MB 内存"
+        # 计算内存变化量
+        if [ -n "$LAST_MEM_MB" ]; then
+          diff=$((mem_mb - LAST_MEM_MB))
+          abs_diff=${diff#-} # Absolute difference
+        else
+          abs_diff=$((MEM_THRESHOLD_MB + 1)) # 强制首次记录
+        fi
+
+        # 如果变化超过阈值, 则记录
+        if [ "$abs_diff" -gt "$MEM_THRESHOLD_MB" ]; then
+          log_safe "💡 当前占用资源: ${mem_mb}MB 内存"
+          LAST_MEM_MB=$mem_mb
+        fi
       fi
     fi
   fi
@@ -47,15 +59,15 @@ log_resource_usage() {
 log_safe "✨ === [monitor] === ✨"
 log_safe "🛡️ 监控服务已启动, 检查周期: ${CHECK_INTERVAL} 秒"
 
-# 初始化网络状态
-last_ip=$(get_primary_ip)
-log_safe "🌏 初始网络 IP: ${last_ip:-'未连接'}"
+PROXY_STATUS="unknown"
+LAST_MEM_MB=""
+MEM_THRESHOLD_MB=5
+LAST_IP=$(get_primary_ip)
 
 # 读取忽略的 SSID 列表
 IGNORE_SSID=$(read_setting "IGNORE_SSID" "")
+log_safe "🌏 初始网络 IP: ${LAST_IP:-'未连接'}"
 [ -n "$IGNORE_SSID" ] && log_safe "🚫 忽略的 SSID: $IGNORE_SSID"
-
-proxy_status="unknown"
 
 # --- 主循环 ---
 
@@ -87,12 +99,12 @@ while true; do
       sh "$SERVICE" stop >/dev/null 2>&1 || log_safe "❓ 服务停止失败"
     fi
     new_status="paused"
-    last_ip=$(get_primary_ip) # 持续更新IP，以便切换网络后能正确识别变化
+    LAST_IP=$(get_primary_ip) # 持续更新IP，以便切换网络后能正确识别变化
   else
     # 2. 检查网络状态 (仅在非忽略网络下)
     current_ip=$(get_primary_ip)
-    if [ "$current_ip" != "$last_ip" ]; then
-      log_safe "🛜 网络切换: ${last_ip:-'N/A'} -> ${current_ip:-'N/A'}"
+    if [ "$current_ip" != "$LAST_IP" ]; then
+      log_safe "🛜 网络切换: ${LAST_IP:-'N/A'} -> ${current_ip:-'N/A'}"
       if [ -n "$current_ip" ]; then
         log_safe "🔄 正在应用新的网络规则..."
         sh "$TPROXY" stop >/dev/null 2>&1 || true
@@ -101,7 +113,7 @@ while true; do
         log_safe "🔌 网络连接断开, 清理规则..."
         sh "$TPROXY" stop >/dev/null 2>&1 || true
       fi
-      last_ip=$current_ip
+      LAST_IP=$current_ip
       sleep 2
     fi
 
@@ -134,19 +146,19 @@ while true; do
       log_safe "🚀 核心未运行, 尝试重启"
       sh "$SERVICE" >/dev/null 2>&1 || log_safe "❓ 代理服务重启失败"
       "$(date +%s)" >>"$RESTARTS_FILE"
-      last_ip=$(get_primary_ip)
+      LAST_IP=$(get_primary_ip)
       sleep 2
     fi
   fi
 
   # 5. 更新模块状态描述
-  if [ "$new_status" != "$proxy_status" ]; then
+  if [ "$new_status" != "$PROXY_STATUS" ]; then
     case "$new_status" in
     "running") update_desc "✅" ;;
     "paused") update_desc "⏸️" ;;
     "stopped") update_desc "⛔" ;;
     esac
-    proxy_status=$new_status
-    log_safe "ℹ️ 模块状态更新为: $proxy_status"
+    PROXY_STATUS=$new_status
+    log_safe "ℹ️ 模块状态更新为: $PROXY_STATUS"
   fi
 done
