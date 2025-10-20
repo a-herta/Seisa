@@ -15,9 +15,7 @@ TABLE_ID=${TABLE_ID:-"100"}
 CHAIN_NAME=${CHAIN_NAME:-"SEISA"}
 CHAIN_PRE=${CHAIN_PRE:-"${CHAIN_NAME}_PRE"}
 CHAIN_OUT=${CHAIN_OUT:-"${CHAIN_NAME}_OUT"}
-CHAIN_LAN=${CHAIN_LAN:-"${CHAIN_NAME}_LAN"}
-CHAIN_LOCAL=${CHAIN_LOCAL:-"${CHAIN_NAME}_LOCAL"}
-CUSTOM_CHAIN=${CUSTOM_CHAIN:-"DIVERT $CHAIN_PRE $CHAIN_OUT $CHAIN_LAN $CHAIN_LOCAL"}
+CUSTOM_CHAIN=${CUSTOM_CHAIN:-"DIVERT $CHAIN_PRE $CHAIN_OUT"}
 
 INTRANET4=${INTRANET4:-"10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 224.0.0.0/4 240.0.0.0/4"}
 INTRANET6=${INTRANET6:-"::1/128 fe80::/10 fc00::/7 ff00::/8"}
@@ -179,14 +177,11 @@ add_tproxy_rules() {
   log_safe "📢 $CHAIN_OUT 忽略程序 $TPROXY_USER($USER_ID:$GROUP_ID)..."
   $ip_cmd -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -j RETURN
 
-  log_safe "➰ $CHAIN_PRE & $CHAIN_OUT 跳转至 $CHAIN_LAN"
-  $ip_cmd -t mangle -A "$CHAIN_PRE" -j "$CHAIN_LAN"
-  $ip_cmd -t mangle -A "$CHAIN_OUT" -j "$CHAIN_LAN"
-
-  # 静态内网地址
-  for ip in $lan_ips; do
-    log_safe "🚩 $CHAIN_LAN 忽略静态内网 ($ip)..."
-    $ip_cmd -t mangle -A "$CHAIN_LAN" -d "$ip" -j RETURN
+  for chain in $CHAIN_PRE $CHAIN_OUT; do
+    for ip in $lan_ips; do
+      log_safe "🚩 $chain 忽略内网 ($ip)..."
+      $ip_cmd -t mangle -A "$chain" -d "$ip" -j RETURN
+    done
   done
 
   for ignore in $IGNORE_LIST; do
