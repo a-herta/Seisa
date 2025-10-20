@@ -12,10 +12,12 @@ MODDIR=$(dirname "$0")
 MARK_HEX=${MARK_HEX:-"0x1/0x1"}
 TABLE_ID=${TABLE_ID:-"100"}
 
-CHAIN_NAME=${CHAIN_NAME:-"FIREFLY"}
+CHAIN_NAME=${CHAIN_NAME:-"SEISA"}
 CHAIN_PRE=${CHAIN_PRE:-"${CHAIN_NAME}_PRE"}
 CHAIN_OUT=${CHAIN_OUT:-"${CHAIN_NAME}_OUT"}
-CUSTOM_CHAIN=${CUSTOM_CHAIN:-"DIVERT $CHAIN_PRE $CHAIN_OUT"}
+CHAIN_LAN=${CHAIN_LAN:-"${CHAIN_NAME}_LAN"}
+CHAIN_LOCAL=${CHAIN_LOCAL:-"${CHAIN_NAME}_LOCAL"}
+CUSTOM_CHAIN=${CUSTOM_CHAIN:-"DIVERT $CHAIN_PRE $CHAIN_OUT $CHAIN_LAN $CHAIN_LOCAL"}
 
 INTRANET4=${INTRANET4:-"10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 224.0.0.0/4 240.0.0.0/4"}
 INTRANET6=${INTRANET6:-"::1/128 fe80::/10 fc00::/7 ff00::/8"}
@@ -141,6 +143,26 @@ add_app_rules() {
   esac
 }
 
+# --- LAN rules --------------------------------------------------------------
+update_lan_rules() {
+  ip_cmd="${1:-iptables}"
+  $ip_cmd -t mangle -F "$CHAIN_LOCAL"
+
+  case "$ip_cmd" in
+  iptables*)
+    local_ips=$(ip -4 a | awk '/inet/ {print $2}' | grep -vE "^127.0.0.1")
+    ;;
+  ip6tables*)
+    local_ips=$(ip -6 a | awk '/inet6/ {print $2}' | grep -vE "^fe80|^::1")
+    ;;
+  esac
+
+  for ip in $local_ips; do
+    log_safe "🚩 $CHAIN_LOCAL 忽略本机接口 ($ip)..."
+    $ip_cmd -t mangle -A "$CHAIN_LOCAL" -d "$ip" -j RETURN
+  done
+}
+
 # --- TPROXY main ------------------------------------------------------------
 add_tproxy_rules() {
   ip_cmd="${1:-iptables}"
@@ -151,13 +173,13 @@ add_tproxy_rules() {
     local_ip="127.0.0.1"
     fire="$FAIR4"
     proto_icmp="icmp"
-    lan_ips="${INTRANET4:+$INTRANET4 }$(ip -4 a | awk '/inet/ {print $2}' | grep -vE "^127.0.0.1")"
+    lan_ips="$INTRANET4"
     ;;
   ip6tables*)
     local_ip="::1"
     fire="$FAIR6"
     proto_icmp="icmpv6"
-    lan_ips="${INTRANET6:+$INTRANET6 }$(ip -6 a | awk '/inet6/ {print $2}' | grep -vE "^fe80|^::1")"
+    lan_ips="$INTRANET6"
     ;;
   esac
 
@@ -177,12 +199,20 @@ add_tproxy_rules() {
   log_safe "📢 $CHAIN_OUT 忽略程序 $TPROXY_USER($USER_ID:$GROUP_ID)..."
   $ip_cmd -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -j RETURN
 
-  for chain in $CHAIN_PRE $CHAIN_OUT; do
-    for ip in $lan_ips; do
-      log_safe "🚩 $chain 忽略内网 ($ip)..."
-      $ip_cmd -t mangle -A "$chain" -d "$ip" -j RETURN
-    done
+  log_safe "➰ $CHAIN_PRE & $CHAIN_OUT 跳转至 $CHAIN_LAN"
+  $ip_cmd -t mangle -A "$CHAIN_PRE" -j "$CHAIN_LAN"
+  $ip_cmd -t mangle -A "$CHAIN_OUT" -j "$CHAIN_LAN"
+
+  # 静态内网地址
+  for ip in $lan_ips; do
+    log_safe "🚩 $CHAIN_LAN 忽略静态内网 ($ip)..."
+    $ip_cmd -t mangle -A "$CHAIN_LAN" -d "$ip" -j RETURN
   done
+
+  # 动态内网地址
+  log_safe "➰ $CHAIN_LAN 跳转至 $CHAIN_LOCAL"
+  $ip_cmd -t mangle -A "$CHAIN_LAN" -j "$CHAIN_LOCAL"
+  update_lan_rules "$ip_cmd"
 
   for ignore in $IGNORE_LIST; do
     log_safe "🎈 $CHAIN_OUT 忽略接口 ($ignore)..."
@@ -308,6 +338,12 @@ stop)
   [ "$IPV6_SUPPORT" = "true" ] && remove_tproxy_rules "ip6tables -w 100"
   unset_routes
   log_safe "✅ 规则已清除"
+  ;;
+update_lan)
+  log_safe "🌏 更新内网规则..."
+  update_lan_rules "iptables -w 100"
+  [ "$IPV6_SUPPORT" = "true" ] && update_lan_rules "ip6tables -w 100"
+  log_safe "✅ 内网规则已更新"
   ;;
 *)
   log_safe "🚀 应用网络规则..."
