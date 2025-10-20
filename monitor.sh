@@ -105,12 +105,6 @@ while true; do
     current_ip=$(get_primary_ip)
     if [ "$current_ip" != "$LAST_IP" ]; then
       log_safe "🛜 网络切换: ${LAST_IP:-'N/A'} -> ${current_ip:-'N/A'}"
-      if [ -n "$current_ip" ]; then
-        log_safe "🔄 正在更新内网规则..."
-        sh "$TPROXY" update_lan >/dev/null 2>&1 || log_safe "❓ 内网规则更新失败"
-      else
-        log_safe "🔌 网络连接断开, 等待恢复..."
-      fi
       LAST_IP=$current_ip
       sleep 2
     fi

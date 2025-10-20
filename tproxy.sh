@@ -143,26 +143,6 @@ add_app_rules() {
   esac
 }
 
-# --- LAN rules --------------------------------------------------------------
-update_lan_rules() {
-  ip_cmd="${1:-iptables}"
-  $ip_cmd -t mangle -F "$CHAIN_LOCAL"
-
-  case "$ip_cmd" in
-  iptables*)
-    local_ips=$(ip -4 a | awk '/inet/ {print $2}' | grep -vE "^127.0.0.1")
-    ;;
-  ip6tables*)
-    local_ips=$(ip -6 a | awk '/inet6/ {print $2}' | grep -vE "^fe80|^::1")
-    ;;
-  esac
-
-  for ip in $local_ips; do
-    log_safe "🚩 $CHAIN_LOCAL 忽略本机接口 ($ip)..."
-    $ip_cmd -t mangle -A "$CHAIN_LOCAL" -d "$ip" -j RETURN
-  done
-}
-
 # --- TPROXY main ------------------------------------------------------------
 add_tproxy_rules() {
   ip_cmd="${1:-iptables}"
@@ -208,11 +188,6 @@ add_tproxy_rules() {
     log_safe "🚩 $CHAIN_LAN 忽略静态内网 ($ip)..."
     $ip_cmd -t mangle -A "$CHAIN_LAN" -d "$ip" -j RETURN
   done
-
-  # 动态内网地址
-  log_safe "➰ $CHAIN_LAN 跳转至 $CHAIN_LOCAL"
-  $ip_cmd -t mangle -A "$CHAIN_LAN" -j "$CHAIN_LOCAL"
-  update_lan_rules "$ip_cmd"
 
   for ignore in $IGNORE_LIST; do
     log_safe "🎈 $CHAIN_OUT 忽略接口 ($ignore)..."
@@ -318,8 +293,8 @@ remove_tproxy_rules() {
 
     for chain in CLASH_DNS_PRE CLASH_DNS_OUT; do
       log_safe "🔗 移除 CLASH_DNS 自定义 $chain 链"
-      $ip_cmd -t mangle -F "$chain" 2>/dev/null || true
-      $ip_cmd -t mangle -X "$chain" 2>/dev/null || true
+      $ip_cmd -t nat -F "$chain" 2>/dev/null || true
+      $ip_cmd -t nat -X "$chain" 2>/dev/null || true
     done
 
     if [ "$FAKEIP_ICMP_FIX" = "true" ]; then
@@ -338,12 +313,6 @@ stop)
   [ "$IPV6_SUPPORT" = "true" ] && remove_tproxy_rules "ip6tables -w 100"
   unset_routes
   log_safe "✅ 规则已清除"
-  ;;
-update_lan)
-  log_safe "🌏 更新内网规则..."
-  update_lan_rules "iptables -w 100"
-  [ "$IPV6_SUPPORT" = "true" ] && update_lan_rules "ip6tables -w 100"
-  log_safe "✅ 内网规则已更新"
   ;;
 *)
   log_safe "🚀 应用网络规则..."
