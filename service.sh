@@ -169,8 +169,8 @@ start_monitor_if_needed() {
     # 检查进程是否已在运行
     if ! pgrep -f "$(basename "$MONITOR")" >/dev/null; then
       if [ -x "$MONITOR" ]; then
-        log_safe "🚀 启动监控守护..."
-        bg_run "$MONITOR"
+        pid=$(bg_run "$MONITOR")
+        log_safe "🚀 监控守护已启动 ($pid)"
       else
         log_safe "❗ 监控守护未找到, 跳过启动"
       fi
