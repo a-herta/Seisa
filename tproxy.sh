@@ -17,10 +17,11 @@ CHAIN_PRE=${CHAIN_PRE:-"${CHAIN_NAME}_PRE"}
 CHAIN_OUT=${CHAIN_OUT:-"${CHAIN_NAME}_OUT"}
 CUSTOM_CHAIN=${CUSTOM_CHAIN:-"DIVERT $CHAIN_PRE $CHAIN_OUT"}
 
-INTRANET4=${INTRANET4:-"10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 169.254.0.0/16 240.0.0.0/4 192.0.0.0/24"}
-INTRANET6=${INTRANET6:-"fe80::/10 fc00::/7"}
+INTRANET4=${INTRANET4:-"10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.0.0.0/24 192.168.0.0/16 224.0.0.0/4 240.0.0.0/4 255.255.255.255/32"}
+INTRANET6=${INTRANET6:-"::1/128 fe80::/10 fc00::/7 ff00::/8"}
 
 UID_LIST="${UID_LIST:-""}"
+IFACES_LIST="${IFACES_LIST:-"wlan+ ap+ rndis+ ncm+ eth+ p2p+"}"
 IGNORE_LIST="${IGNORE_LIST:-""}"
 
 FAIR4=${FAIR4:-"198.18.0.0/15"}
@@ -173,6 +174,9 @@ add_tproxy_rules() {
   $ip_cmd -t mangle -I PREROUTING -p tcp -m socket --transparent -j DIVERT
   $ip_cmd -t mangle -I PREROUTING -p udp -m socket --transparent -j DIVERT
 
+  # log_safe "⭕ $CHAIN_PRE 忽略来自 lo 且未标记的流量"
+  # $ip_cmd -t mangle -A "$CHAIN_PRE" -i lo -m mark --mark 0x0/0x1 -j RETURN
+
   log_safe "📢 $CHAIN_OUT RETURN 代理核心自身 $USER_ID:$GROUP_ID"
   $ip_cmd -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -j RETURN
 
@@ -218,22 +222,27 @@ add_tproxy_rules() {
   esac
 
   for chain in $CHAIN_PRE $CHAIN_OUT; do
-    log_safe "🚩 $chain RETURN 本机接口地址"
-    $ip_cmd -t mangle -A "$chain" -m addrtype --dst-type LOCAL -j RETURN 2>/dev/null || true
-    log_safe "🚩 $chain RETURN 本机多播地址"
-    $ip_cmd -t mangle -A "$chain" -m addrtype --dst-type MULTICAST -j RETURN 2>/dev/null || true
-    log_safe "🚩 $chain RETURN 本机广播地址"
-    $ip_cmd -t mangle -A "$chain" -m addrtype --dst-type BROADCAST -j RETURN 2>/dev/null || true
-
     for ip in $lan_ips; do
       log_safe "🚩 $chain RETURN 局域网 $ip"
       $ip_cmd -t mangle -A "$chain" -d "$ip" -j RETURN
     done
   done
 
-  log_safe "🔄 $CHAIN_PRE TPROXY 剩余流量到 $TPROXY_PORT..."
-  $ip_cmd -t mangle -A "$CHAIN_PRE" -p tcp -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
-  $ip_cmd -t mangle -A "$CHAIN_PRE" -p udp -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
+  if [ -n "$IFACES_LIST" ]; then
+    log_safe "📡 $CHAIN_PRE TPROXY lo 接口"
+    $ip_cmd -t mangle -A "$CHAIN_PRE" -p tcp -i lo -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
+    $ip_cmd -t mangle -A "$CHAIN_PRE" -p udp -i lo -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
+
+    for iface in $IFACES_LIST; do
+      log_safe "📡 $CHAIN_PRE TPROXY 来宾接口 $iface"
+      $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p tcp -i "$iface" -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
+      $ip_cmd -w 100 -t mangle -A "$CHAIN_PRE" -p udp -i "$iface" -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
+    done
+  else
+    log_safe "🔄 $CHAIN_PRE TPROXY 剩余流量到 $TPROXY_PORT..."
+    $ip_cmd -t mangle -A "$CHAIN_PRE" -p tcp -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
+    $ip_cmd -t mangle -A "$CHAIN_PRE" -p udp -j TPROXY --on-port "$TPROXY_PORT" --tproxy-mark "$MARK_HEX"
+  fi
 
   add_app_rules "$ip_cmd"
 
