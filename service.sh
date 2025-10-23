@@ -194,6 +194,11 @@ stop)
   log_safe "🚀 服务启动中..."
   # --- 锁机制: 防止多个实例同时运行 ---
   [ ! -f "$LOCK_FILE" ] || abort_safe "❗ 检测到另一个服务实例正在运行, 启动中止"
+  uptime=$(cut -d. -f1 /proc/uptime)
+  if [ "$uptime" -lt 180 ]; then
+    log_safe "系统已重启, 等待服务初始化"
+    sleep 5
+  fi
   # 1. 创建锁文件, 并设置 trap 以确保在脚本退出时自动删除
   touch "$LOCK_FILE"
   trap 'rm -f "$LOCK_FILE"; log_safe "🔓 锁已释放"' EXIT HUP INT QUIT TERM

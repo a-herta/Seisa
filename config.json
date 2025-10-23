@@ -34,7 +34,7 @@
         "server": "remote"
       }
     ],
-    "strategy": "prefer_ipv4",
+    "strategy": "ipv4_only",
     "independent_cache": true
   },
   "inbounds": [
@@ -723,9 +723,7 @@
       "store_rdrc": true
     },
     "clash_api": {
-      "external_controller": "[::]:9090",
-      "access_control_allow_origin": "https://board.zash.run.place",
-      "access_control_allow_private_network": true
+      "external_controller": "[::]:9090"
     }
   }
 }
