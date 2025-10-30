@@ -8,7 +8,7 @@ set -e
 MODDIR=$(dirname "$0")
 . "$MODDIR/common.sh"
 
-log_safe "✨ === [uninstall] ==="
+log_safe "✨ === [uninstall] === ✨"
 log_safe "🗑️ 开始卸载清理..."
 
 # 1. 尝试通过 service.sh 优雅地停止服务

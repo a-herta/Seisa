@@ -11,6 +11,12 @@
         "server": "223.5.5.5"
       },
       {
+        "type": "h3",
+        "tag": "google",
+        "detour": "Proxy",
+        "server": "dns.google"
+      },
+      {
         "type": "fakeip",
         "tag": "remote",
         "inet4_range": "198.18.0.0/15",
@@ -19,12 +25,16 @@
     ],
     "rules": [
       {
-        "rule_set": "category-ads-all",
-        "action": "reject"
+        "clash_mode": "direct",
+        "server": "aliyun"
       },
       {
-        "source_ip_is_private": true,
-        "server": "aliyun"
+        "clash_mode": "global",
+        "server": "google"
+      },
+      {
+        "rule_set": "category-ads-all",
+        "action": "reject"
       },
       {
         "query_type": [
@@ -34,7 +44,7 @@
         "server": "remote"
       }
     ],
-    "strategy": "ipv4_only",
+    "strategy": "prefer_ipv4",
     "independent_cache": true
   },
   "inbounds": [
@@ -363,7 +373,9 @@
       "tcp_fast_open": true,
       "udp_fragment": true,
       "server": "example.com",
-      "server_port": 6666
+      "server_port": 6666,
+      "uuid": "",
+      "security": ""
     },
     {
       "type": "vmess",
@@ -371,7 +383,9 @@
       "tcp_fast_open": true,
       "udp_fragment": true,
       "server": "example.com",
-      "server_port": 6666
+      "server_port": 6666,
+      "uuid": "",
+      "security": ""
     },
     {
       "type": "vmess",
@@ -379,7 +393,9 @@
       "tcp_fast_open": true,
       "udp_fragment": true,
       "server": "example.com",
-      "server_port": 6666
+      "server_port": 6666,
+      "uuid": "",
+      "security": ""
     },
     {
       "type": "vmess",
@@ -387,7 +403,9 @@
       "tcp_fast_open": true,
       "udp_fragment": true,
       "server": "example.com",
-      "server_port": 6666
+      "server_port": 6666,
+      "uuid": "",
+      "security": ""
     },
     {
       "type": "vmess",
@@ -395,7 +413,9 @@
       "tcp_fast_open": true,
       "udp_fragment": true,
       "server": "example.com",
-      "server_port": 6666
+      "server_port": 6666,
+      "uuid": "",
+      "security": ""
     },
     {
       "type": "vmess",
@@ -403,7 +423,9 @@
       "tcp_fast_open": true,
       "udp_fragment": true,
       "server": "example.com",
-      "server_port": 6666
+      "server_port": 6666,
+      "uuid": "",
+      "security": ""
     }
   ],
   "route": {
@@ -412,7 +434,16 @@
         "action": "sniff"
       },
       {
-        "protocol": "dns",
+        "type": "logical",
+        "mode": "or",
+        "rules": [
+          {
+            "port": 53
+          },
+          {
+            "protocol": "dns"
+          }
+        ],
         "action": "hijack-dns"
       },
       {

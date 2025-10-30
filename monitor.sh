@@ -63,6 +63,7 @@ PROXY_STATUS="unknown"
 LAST_MEM_MB=""
 MEM_THRESHOLD_MB=5
 LAST_IP=$(get_primary_ip)
+LAST_SUB_UPDATE_TIME=0
 
 # 读取忽略的 SSID 列表
 IGNORE_SSID=$(read_setting "IGNORE_SSID" "")

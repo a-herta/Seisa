@@ -67,8 +67,11 @@ BIN_CONF=${BIN_CONF:-"$PERSIST_DIR/$(read_setting "BIN_CONFIG" "config.json")"}
 # --- 代理用户配置 ---
 TPROXY_USER=${TPROXY_USER:-"root:net_admin"}
 
+# --- 辅助程序配置 ---
+UTIL_PATH=${UTIL_PATH:-"$MODDIR/bin"}
+
 # --- 环境与路径 ---
-export PATH="$PATH:/data/adb/magisk:/data/adb/ksu/bin:/data/adb/ap/bin"
+export PATH="$PATH:/data/adb/magisk:/data/adb/ksu/bin:/data/adb/ap/bin:$UTIL_PATH"
 if type ui_print >/dev/null 2>&1; then IS_INSTALLER_ENV=1; else IS_INSTALLER_ENV=0; fi
 
 # --- 日志与退出 ---

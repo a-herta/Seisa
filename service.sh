@@ -8,7 +8,7 @@ set -e
 MODDIR=$(dirname "$0")
 . "$MODDIR/common.sh"
 
-log_safe "✨ === [service] ==="
+log_safe "✨ === [service] === ✨"
 
 # --- 函数定义 ---
 

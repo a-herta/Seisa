@@ -21,7 +21,7 @@ if [ -z "$TMPDIR" ]; then
 fi
 API_URL_BASE="https://api.github.com/repos/${BIN_REPO}/releases"
 
-log_safe "✨ === [update-bin] ==="
+log_safe "✨ === [update-bin] === ✨"
 log_safe "🚀 开始更新代理核心..."
 
 # 架构检测

@@ -8,7 +8,7 @@ set -e
 MODDIR=$(dirname "$0")
 . "$MODDIR/common.sh"
 
-log_safe "✨ === [action] ==="
+log_safe "✨ === [action] === ✨"
 log_safe "🔄 切换服务状态..."
 
 [ -x "$SERVICE" ] || abort_safe "❌ 服务不可执行, 操作中止"

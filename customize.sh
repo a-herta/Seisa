@@ -9,7 +9,7 @@ set -e
 MODPATH=${MODPATH:-$(dirname "$0")}
 . "$MODPATH/common.sh"
 
-log_safe "✨ === [customize] ==="
+log_safe "✨ === [customize] === ✨"
 log_safe "📂 模块临时路径: $MODPATH"
 log_safe "📂 持久化数据路径: $PERSIST_DIR"
 

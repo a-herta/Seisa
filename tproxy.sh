@@ -34,7 +34,7 @@ CLASH_DNS_PORT=${CLASH_DNS_PORT:-"1053"}
 IPV6_SUPPORT=${IPV6_SUPPORT:-"$(read_setting "IPV6_SUPPORT" "true")"}
 PROXY_MODE=${PROXY_MODE:-"$(read_setting "PROXY_MODE" "blacklist")"}
 
-log_safe "✨ === [tproxy] ==="
+log_safe "✨ === [tproxy] === ✨"
 
 read -r USER_ID GROUP_ID <<EOF
 $(resolve_user_group "$TPROXY_USER")
