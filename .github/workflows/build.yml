@@ -30,11 +30,6 @@ on:
         description: The agent core repository (owner/repo)
         type: string
         default: SagerNet/sing-box
-      release_tag:
-        description: The agent core release tag (e.g., v1.9.0-beta.11). Leave empty for
-          latest.
-        required: false
-        type: string
 
 jobs:
   build:
@@ -118,94 +113,29 @@ jobs:
 
           # For manual dispatch, use inputs. For tag push, use defaults.
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            ARCH="${{ inputs.architecture }}"
-            BIN_NAME="${{ inputs.bin_name }}"
             REPO="${{ inputs.bin_repo }}"
-            TAG="${{ inputs.release_tag }}"
+            BIN_NAME="${{ inputs.bin_name }}"
+            ARCH="${{ inputs.architecture }}"
           else
-            ARCH="${{ vars.ARCHITECTURE }}"
-            BIN_NAME="${{ vars.BIN_NAME }}"
             REPO="${{ vars.BIN_REPO }}"
-            TAG="" # Latest for releases
+            BIN_NAME="${{ vars.BIN_NAME }}"
+            ARCH="${{ vars.ARCHITECTURE }}"
           fi
 
-          # Determine GitHub API URL
-          if [[ -z "$TAG" ]]; then
-            API_URL="https://api.github.com/repos/$REPO/releases/latest"
-            echo "Fetching latest release from $REPO"
-          else
-            API_URL="https://api.github.com/repos/$REPO/releases/tags/$TAG"
-            echo "Fetching release $TAG from $REPO"
-          fi
+          DEST_PATH="./$BIN_NAME"
 
-          # Get release info
-          RELEASE_JSON=$(curl -sL -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$API_URL")
+          echo "Downloading agent core using fetch-core.sh..."
+          echo "  Repository:    $REPO"
+          echo "  Binary Name:   $BIN_NAME"
+          echo "  Architecture:  $ARCH"
+          echo "  Destination:   $DEST_PATH"
 
-          # Define architecture patterns
-          declare -A patterns
-          patterns["arm64-v8a"]="android.*(arm64|aarch64);linux.*(arm64|aarch64|armv8)"
-          patterns["armeabi-v7a"]="android.*(armv7|arm-v7);linux.*(armv7|arm-v7)"
-          patterns["x86"]="android.*(x86);linux.*(x86|i386)"
-          patterns["x86_64"]="android.*(x86_64|amd64);linux.*(x86_64|amd64)"
+          # The script is expected to handle the download, extraction, and placement.
+          # It should also handle the case where TAG is empty (meaning latest release).
+          chmod +x ./fetch-core.sh
+          ./fetch-core.sh "$REPO" "$BIN_NAME" "$ARCH" "$DEST_PATH"
 
-          # Find asset URL
-          ASSET_URL=""
-          IFS=';' read -ra arch_patterns <<< "${patterns[$ARCH]}"
-          for pattern in "${arch_patterns[@]}"; do
-            ASSET_URL=$(echo "$RELEASE_JSON" | jq -r ".assets[] | select(.name | test(\"$pattern\"; \"i\")) | .browser_download_url" | head -n1)
-            if [[ -n "$ASSET_URL" ]]; then
-              echo "Found matching asset for pattern '$pattern': $ASSET_URL"
-              break
-            fi
-          done
-
-          if [[ -z "$ASSET_URL" ]]; then
-            echo "No specific architecture match found, trying to find a generic binary."
-            ASSET_URL=$(echo "$RELEASE_JSON" | jq -r ".assets[] | select(.name | test(\"$BIN_NAME\"; \"i\")) | .browser_download_url" | head -n1)
-          fi
-
-          if [[ -z "$ASSET_URL" ]]; then
-            echo "::error::Could not find a suitable binary for architecture $ARCH."
-            exit 1
-          fi
-
-          # Download and extract
-          TMPDIR=$(mktemp -d)
-          FNAME="$TMPDIR/asset"
-
-          echo "Downloading from $ASSET_URL..."
-          curl -L -o "$FNAME" "$ASSET_URL"
-
-          echo "Downloaded file type:"
-          file "$FNAME"
-
-          BPATH=""
-          MIME_TYPE=$(file --mime-type -b "$FNAME")
-          echo "Detected MIME type: $MIME_TYPE"
-
-          if [[ "$MIME_TYPE" == "application/zip" ]]; then
-            unzip -o "$FNAME" -d "$TMPDIR"
-            BPATH=$(find "$TMPDIR" -type f -iname "$BIN_NAME" | head -n1)
-          elif [[ "$MIME_TYPE" == "application/gzip" || "$MIME_TYPE" == "application/x-gzip" ]]; then
-            tar -xzf "$FNAME" -C "$TMPDIR"
-            BPATH=$(find "$TMPDIR" -type f -iname "$BIN_NAME" | head -n1)
-          else
-            # Assume it's a raw binary
-            mv "$FNAME" "$TMPDIR/$BIN_NAME"
-            BPATH="$TMPDIR/$BIN_NAME"
-          fi
-
-          if [[ -z "$BPATH" ]]; then
-            echo "::error::Could not find '$BIN_NAME' in the downloaded asset."
-            exit 1
-          fi
-
-          echo "Binary found at: $BPATH"
-          mv "$BPATH" "./$BIN_NAME"
-          chmod +x "./$BIN_NAME"
-
-          echo "Successfully placed binary at ./$BIN_NAME"
-          rm -rf "$TMPDIR"
+          echo "Binary download and placement complete."
 
       - name: '📦 Package module'
         id: package

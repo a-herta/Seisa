@@ -6,7 +6,7 @@
   "dns": {
     "servers": [
       {
-        "type": "quic",
+        "type": "h3",
         "tag": "aliyun",
         "server": "223.5.5.5"
       },
@@ -24,14 +24,6 @@
       }
     ],
     "rules": [
-      {
-        "clash_mode": "direct",
-        "server": "aliyun"
-      },
-      {
-        "clash_mode": "global",
-        "server": "google"
-      },
       {
         "rule_set": "category-ads-all",
         "action": "reject"
@@ -71,6 +63,7 @@
         "SG",
         "Direct"
       ],
+      "providers": null,
       "default": "US"
     },
     {
@@ -79,7 +72,7 @@
     },
     {
       "type": "selector",
-      "tag": "AI",
+      "tag": "Scholar",
       "outbounds": [
         "Proxy",
         "HK",
@@ -89,6 +82,7 @@
         "US",
         "SG"
       ],
+      "providers": null,
       "default": "US"
     },
     {
@@ -102,11 +96,12 @@
         "KR",
         "US",
         "SG"
-      ]
+      ],
+      "providers": null
     },
     {
       "type": "selector",
-      "tag": "Twitter",
+      "tag": "X",
       "outbounds": [
         "Proxy",
         "HK",
@@ -115,11 +110,12 @@
         "KR",
         "US",
         "SG"
-      ]
+      ],
+      "providers": null
     },
     {
       "type": "selector",
-      "tag": "Facebook",
+      "tag": "Meta",
       "outbounds": [
         "Proxy",
         "HK",
@@ -128,7 +124,8 @@
         "KR",
         "US",
         "SG"
-      ]
+      ],
+      "providers": null
     },
     {
       "type": "selector",
@@ -139,32 +136,8 @@
         "TW",
         "JP"
       ],
+      "providers": null,
       "default": "TW"
-    },
-    {
-      "type": "selector",
-      "tag": "Bilibili",
-      "outbounds": [
-        "Direct",
-        "HK",
-        "TW",
-        "JP"
-      ],
-      "default": "TW"
-    },
-    {
-      "type": "selector",
-      "tag": "DMM",
-      "outbounds": [
-        "Proxy",
-        "HK",
-        "TW",
-        "JP",
-        "KR",
-        "US",
-        "SG"
-      ],
-      "default": "JP"
     },
     {
       "type": "selector",
@@ -178,6 +151,7 @@
         "US",
         "SG"
       ],
+      "providers": null,
       "default": "JP"
     },
     {
@@ -191,11 +165,12 @@
         "KR",
         "US",
         "SG"
-      ]
+      ],
+      "providers": null
     },
     {
       "type": "selector",
-      "tag": "Netflix",
+      "tag": "Media",
       "outbounds": [
         "Proxy",
         "HK",
@@ -205,46 +180,8 @@
         "US",
         "SG"
       ],
+      "providers": null,
       "default": "US"
-    },
-    {
-      "type": "selector",
-      "tag": "Amazon",
-      "outbounds": [
-        "Proxy",
-        "HK",
-        "TW",
-        "JP",
-        "KR",
-        "US",
-        "SG"
-      ]
-    },
-    {
-      "type": "selector",
-      "tag": "Games",
-      "outbounds": [
-        "Proxy",
-        "HK",
-        "TW",
-        "JP",
-        "KR",
-        "US",
-        "SG"
-      ]
-    },
-    {
-      "type": "selector",
-      "tag": "Microsoft",
-      "outbounds": [
-        "Proxy",
-        "HK",
-        "TW",
-        "JP",
-        "KR",
-        "US",
-        "SG"
-      ]
     },
     {
       "type": "selector",
@@ -257,7 +194,8 @@
         "KR",
         "US",
         "SG"
-      ]
+      ],
+      "providers": null
     },
     {
       "type": "selector",
@@ -270,7 +208,22 @@
         "KR",
         "US",
         "SG"
-      ]
+      ],
+      "providers": null
+    },
+    {
+      "type": "selector",
+      "tag": "Microsoft",
+      "outbounds": [
+        "Proxy",
+        "HK",
+        "TW",
+        "JP",
+        "KR",
+        "US",
+        "SG"
+      ],
+      "providers": null
     },
     {
       "type": "selector",
@@ -278,30 +231,23 @@
       "outbounds": [
         "Direct",
         "Proxy"
-      ]
+      ],
+      "providers": null
     },
     {
       "type": "selector",
       "tag": "Available",
-      "outbounds": [
-        "🇭🇰 HK-香港",
-        "🇯🇵 JP-日本",
-        "🇹🇼 TW-台湾",
-        "🇸🇬 SG-新加坡",
-        "🇰🇷 KR-韩国",
-        "🇺🇸 US-美国"
+      "outbounds": null,
+      "providers": [
+        "provider"
       ]
     },
     {
       "type": "urltest",
       "tag": "Auto",
-      "outbounds": [
-        "🇭🇰 HK-香港",
-        "🇯🇵 JP-日本",
-        "🇹🇼 TW-台湾",
-        "🇸🇬 SG-新加坡",
-        "🇰🇷 KR-韩国",
-        "🇺🇸 US-美国"
+      "outbounds": null,
+      "providers": [
+        "provider"
       ],
       "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
@@ -310,9 +256,11 @@
     {
       "type": "urltest",
       "tag": "HK",
-      "outbounds": [
-        "🇭🇰 HK-香港"
+      "outbounds": null,
+      "providers": [
+        "provider"
       ],
+      "include": "(?i)🇭🇰|港|HK|Hong",
       "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
       "tolerance": 50
@@ -320,9 +268,11 @@
     {
       "type": "urltest",
       "tag": "TW",
-      "outbounds": [
-        "🇹🇼 TW-台湾"
+      "outbounds": null,
+      "providers": [
+        "provider"
       ],
+      "include": "(?i)🇹🇼|台|TW|Tai",
       "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
       "tolerance": 50
@@ -330,9 +280,11 @@
     {
       "type": "urltest",
       "tag": "JP",
-      "outbounds": [
-        "🇯🇵 JP-日本"
+      "outbounds": null,
+      "providers": [
+        "provider"
       ],
+      "include": "(?i)🇯🇵|日本|东京|大阪|JP|Jap",
       "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
       "tolerance": 50
@@ -340,9 +292,11 @@
     {
       "type": "urltest",
       "tag": "KR",
-      "outbounds": [
-        "🇰🇷 KR-韩国"
+      "outbounds": null,
+      "providers": [
+        "provider"
       ],
+      "include": "(?i)🇰🇷|韩|韓|朝|首尔|KR|Korea",
       "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
       "tolerance": 50
@@ -350,9 +304,11 @@
     {
       "type": "urltest",
       "tag": "US",
-      "outbounds": [
-        "🇺🇸 US-美国"
+      "outbounds": null,
+      "providers": [
+        "provider"
       ],
+      "include": "(?i)🇺🇸|美|US|States|American",
       "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
       "tolerance": 50
@@ -360,72 +316,22 @@
     {
       "type": "urltest",
       "tag": "SG",
-      "outbounds": [
-        "🇸🇬 SG-新加坡"
+      "outbounds": null,
+      "providers": [
+        "provider"
       ],
+      "include": "(?i)🇸🇬|新加坡|狮|獅|SG|Singapore",
       "url": "https://www.gstatic.com/generate_204",
       "interval": "10m0s",
       "tolerance": 50
-    },
+    }
+  ],
+  "providers": [
     {
-      "type": "vmess",
-      "tag": "🇭🇰 HK-香港",
-      "tcp_fast_open": true,
-      "udp_fragment": true,
-      "server": "example.com",
-      "server_port": 6666,
-      "uuid": "",
-      "security": ""
-    },
-    {
-      "type": "vmess",
-      "tag": "🇹🇼 TW-台湾",
-      "tcp_fast_open": true,
-      "udp_fragment": true,
-      "server": "example.com",
-      "server_port": 6666,
-      "uuid": "",
-      "security": ""
-    },
-    {
-      "type": "vmess",
-      "tag": "🇯🇵 JP-日本",
-      "tcp_fast_open": true,
-      "udp_fragment": true,
-      "server": "example.com",
-      "server_port": 6666,
-      "uuid": "",
-      "security": ""
-    },
-    {
-      "type": "vmess",
-      "tag": "🇰🇷 KR-韩国",
-      "tcp_fast_open": true,
-      "udp_fragment": true,
-      "server": "example.com",
-      "server_port": 6666,
-      "uuid": "",
-      "security": ""
-    },
-    {
-      "type": "vmess",
-      "tag": "🇺🇸 US-美国",
-      "tcp_fast_open": true,
-      "udp_fragment": true,
-      "server": "example.com",
-      "server_port": 6666,
-      "uuid": "",
-      "security": ""
-    },
-    {
-      "type": "vmess",
-      "tag": "🇸🇬 SG-新加坡",
-      "tcp_fast_open": true,
-      "udp_fragment": true,
-      "server": "example.com",
-      "server_port": 6666,
-      "uuid": "",
-      "security": ""
+      "type": "remote",
+      "tag": "provider",
+      "url": "http://localhost:3000/download/Firefly",
+      "download_detour": "Direct"
     }
   ],
   "route": {
@@ -466,44 +372,44 @@
         "outbound": "Direct"
       },
       {
-        "rule_set": "category-ai-!cn",
-        "outbound": "AI"
+        "rule_set": [
+          "category-dev@cn",
+          "category-games@cn",
+          "category-media@cn",
+          "googlefcm",
+          "apple@cn",
+          "google@cn",
+          "microsoft@cn"
+        ],
+        "outbound": "Bypass"
       },
       {
         "rule_set": [
-          "telegram",
-          "telegram-ip"
+          "category-ai-!cn",
+          "category-ai-cn@!cn",
+          "category-scholar-!cn"
         ],
+        "outbound": "Scholar"
+      },
+      {
+        "rule_set": "telegram",
         "outbound": "Telegram"
       },
       {
-        "rule_set": [
-          "twitter",
-          "twitter-ip"
-        ],
-        "outbound": "Twitter"
+        "rule_set": "x",
+        "outbound": "X"
+      },
+      {
+        "rule_set": "meta",
+        "outbound": "Meta"
       },
       {
         "rule_set": [
-          "facebook",
-          "facebook-ip"
+          "dmm",
+          "bahamut",
+          "biliintl"
         ],
-        "outbound": "Facebook"
-      },
-      {
-        "rule_set": "bahamut",
         "outbound": "Bahamut"
-      },
-      {
-        "rule_set": [
-          "bilibili",
-          "bilibili-ip"
-        ],
-        "outbound": "Bilibili"
-      },
-      {
-        "rule_set": "dmm",
-        "outbound": "DMM"
       },
       {
         "rule_set": "tiktok",
@@ -519,52 +425,32 @@
           "disney",
           "netflix",
           "primevideo",
-          "netflix-ip"
+          "amazon"
         ],
-        "outbound": "Netflix"
+        "outbound": "Media"
       },
       {
-        "rule_set": [
-          "amazon",
-          "cloudflare-ip",
-          "cloudfront-ip"
-        ],
-        "outbound": "Amazon"
+        "rule_set": "apple",
+        "outbound": "Apple"
       },
       {
-        "rule_set": "category-games-!cn",
-        "outbound": "Games"
+        "rule_set": "google",
+        "outbound": "Google"
       },
       {
         "rule_set": "microsoft",
         "outbound": "Microsoft"
       },
       {
-        "rule_set": [
-          "apple",
-          "apple-ip"
-        ],
-        "outbound": "Apple"
+        "rule_set": "geolocation-!cn",
+        "outbound": "Proxy"
       },
       {
         "rule_set": [
-          "google",
-          "google-ip"
-        ],
-        "outbound": "Google"
-      },
-      {
-        "rule_set": [
-          "category-games@cn",
-          "microsoft@cn",
           "cn",
           "cn-ip"
         ],
-        "outbound": "Bypass"
-      },
-      {
-        "rule_set": "geolocation-!cn",
-        "outbound": "Proxy"
+        "outbound": "Direct"
       }
     ],
     "rule_set": [
@@ -580,8 +466,58 @@
       },
       {
         "type": "remote",
+        "tag": "private-ip",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geoip/private.srs"
+      },
+      {
+        "type": "remote",
+        "tag": "category-dev@cn",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-dev@cn.srs"
+      },
+      {
+        "type": "remote",
+        "tag": "category-games@cn",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-games@cn.srs"
+      },
+      {
+        "type": "remote",
+        "tag": "category-media@cn",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-media@cn.srs"
+      },
+      {
+        "type": "remote",
+        "tag": "googlefcm",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/googlefcm.srs"
+      },
+      {
+        "type": "remote",
+        "tag": "apple@cn",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/apple@cn.srs"
+      },
+      {
+        "type": "remote",
+        "tag": "google@cn",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/google@cn.srs"
+      },
+      {
+        "type": "remote",
+        "tag": "microsoft@cn",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/microsoft@cn.srs"
+      },
+      {
+        "type": "remote",
         "tag": "category-ai-!cn",
         "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-ai-!cn.srs"
+      },
+      {
+        "type": "remote",
+        "tag": "category-ai-cn@!cn",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-ai-cn@!cn.srs"
+      },
+      {
+        "type": "remote",
+        "tag": "category-scholar-!cn",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-scholar-!cn.srs"
       },
       {
         "type": "remote",
@@ -590,13 +526,13 @@
       },
       {
         "type": "remote",
-        "tag": "twitter",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/twitter.srs"
+        "tag": "x",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/x.srs"
       },
       {
         "type": "remote",
-        "tag": "facebook",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/facebook.srs"
+        "tag": "meta",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/meta.srs"
       },
       {
         "type": "remote",
@@ -605,8 +541,8 @@
       },
       {
         "type": "remote",
-        "tag": "bilibili",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/bilibili.srs"
+        "tag": "biliintl",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/biliintl.srs"
       },
       {
         "type": "remote",
@@ -650,26 +586,6 @@
       },
       {
         "type": "remote",
-        "tag": "category-games@cn",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-games@cn.srs"
-      },
-      {
-        "type": "remote",
-        "tag": "category-games-!cn",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-games-!cn.srs"
-      },
-      {
-        "type": "remote",
-        "tag": "microsoft@cn",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/microsoft@cn.srs"
-      },
-      {
-        "type": "remote",
-        "tag": "microsoft",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/microsoft.srs"
-      },
-      {
-        "type": "remote",
         "tag": "apple",
         "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/apple.srs"
       },
@@ -677,6 +593,11 @@
         "type": "remote",
         "tag": "google",
         "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/google.srs"
+      },
+      {
+        "type": "remote",
+        "tag": "microsoft",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/microsoft.srs"
       },
       {
         "type": "remote",
@@ -690,58 +611,8 @@
       },
       {
         "type": "remote",
-        "tag": "private-ip",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/private.srs"
-      },
-      {
-        "type": "remote",
-        "tag": "telegram-ip",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/telegram.srs"
-      },
-      {
-        "type": "remote",
-        "tag": "twitter-ip",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/twitter.srs"
-      },
-      {
-        "type": "remote",
-        "tag": "facebook-ip",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/facebook.srs"
-      },
-      {
-        "type": "remote",
-        "tag": "bilibili-ip",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/bilibili.srs"
-      },
-      {
-        "type": "remote",
-        "tag": "netflix-ip",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/netflix.srs"
-      },
-      {
-        "type": "remote",
-        "tag": "cloudflare-ip",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/cloudflare.srs"
-      },
-      {
-        "type": "remote",
-        "tag": "cloudfront-ip",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/cloudfront.srs"
-      },
-      {
-        "type": "remote",
-        "tag": "apple-ip",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/apple.srs"
-      },
-      {
-        "type": "remote",
-        "tag": "google-ip",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/google.srs"
-      },
-      {
-        "type": "remote",
         "tag": "cn-ip",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geoip/cn.srs"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geoip/cn.srs"
       }
     ],
     "auto_detect_interface": true,

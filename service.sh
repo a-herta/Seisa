@@ -45,7 +45,6 @@ ensure_bin() {
   update="$MODDIR/update-bin.sh"
   en=$(read_setting "ENABLE_AUTO_UPDATE" "true")
   bin_repo=$(read_setting "BIN_REPO" "SagerNet/sing-box")
-  release_tag=$(read_setting "BIN_RELEASE" "latest")
 
   # 检查更新脚本是否存在
   if [ ! -x "$update" ]; then
@@ -59,7 +58,7 @@ ensure_bin() {
   # 如果核心不存在, 必须执行更新
   if [ ! -x "$BIN_PATH" ]; then
     log_safe "❗ 代理核心不存在, 尝试自动下载..."
-    sh "$update" "$bin_repo" "$release_tag" >/dev/null 2>&1 || log_safe "❓ 自动更新执行失败"
+    sh "$update" "$bin_repo" >/dev/null 2>&1 || log_safe "❓ 自动更新执行失败"
     if [ ! -x "$BIN_PATH" ]; then
       log_safe "❌ 下载代理核心出错"
       return 1

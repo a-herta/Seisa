@@ -4,9 +4,12 @@
 # =====================================================================
 
 # --- 模块路径与标识 ---
-MODDIR=${MODDIR:-${0%/*}}
+MODDIR=${MODDIR:-$(dirname "$0")}
 MODID=${MODID:-$(basename "$MODDIR")}
-PERSIST_DIR=${PERSIST_DIR:-"/data/adb/$MODID"}
+PERSIST_DIR=${PERSIST_DIR:-"../../$MODID"}
+if [ ! -f "/system/build.prop" ]; then
+  PERSIST_DIR=$MODDIR
+fi
 
 # --- 并发安全配置读写 ---
 MOD_SETTING=${MOD_SETTING:-"$PERSIST_DIR/settings.conf"}
@@ -67,11 +70,8 @@ BIN_CONF=${BIN_CONF:-"$PERSIST_DIR/$(read_setting "BIN_CONFIG" "config.json")"}
 # --- 代理用户配置 ---
 TPROXY_USER=${TPROXY_USER:-"root:net_admin"}
 
-# --- 辅助程序配置 ---
-UTIL_PATH=${UTIL_PATH:-"$MODDIR/bin"}
-
 # --- 环境与路径 ---
-export PATH="$PATH:/data/adb/magisk:/data/adb/ksu/bin:/data/adb/ap/bin:$UTIL_PATH"
+export PATH="$PATH:/data/adb/magisk:/data/adb/ksu/bin:/data/adb/ap/bin"
 if type ui_print >/dev/null 2>&1; then IS_INSTALLER_ENV=1; else IS_INSTALLER_ENV=0; fi
 
 # --- 日志与退出 ---

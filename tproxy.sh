@@ -16,7 +16,7 @@ CHAIN_NAME=${CHAIN_NAME:-"SEISA"}
 CHAIN_PRE=${CHAIN_PRE:-"${CHAIN_NAME}_PRE"}
 CHAIN_OUT=${CHAIN_OUT:-"${CHAIN_NAME}_OUT"}
 CHAIN_LAN=${CHAIN_LAN:-"${CHAIN_NAME}_LAN"}
-CUSTOM_CHAIN=${CUSTOM_CHAIN:-"DIVERT $CHAIN_PRE $CHAIN_OUT $CHAIN_LAN"}
+CUSTOM_CHAIN=${CUSTOM_CHAIN:-"$CHAIN_PRE $CHAIN_OUT $CHAIN_LAN"}
 
 INTRANET4=${INTRANET4:-"10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.0.0.0/24 192.168.0.0/16 224.0.0.0/4 240.0.0.0/4 255.255.255.255/32"}
 INTRANET6=${INTRANET6:-"::1/128 fe80::/10 fc00::/7 ff00::/8"}
@@ -149,16 +149,23 @@ update_lan_rules() {
 
   case "$ip_cmd" in
   iptables*)
+    lan_ips="$INTRANET4"
     local_ips=$(ip -4 a | awk '/inet/ {print $2}' | grep -vE "^127.0.0.1")
     ;;
   ip6tables*)
+    lan_ips="$INTRANET6"
     local_ips=$(ip -6 a | awk '/inet6/ {print $2}' | grep -vE "^fe80|^::1")
     ;;
   esac
 
+  for ip in $lan_ips; do
+    log_safe "🚩 $CHAIN_LAN RETURN 局域网 $ip"
+    $ip_cmd -t mangle -A "$CHAIN_LAN" -d "$ip" -j RETURN
+  done
+
   for ip in $local_ips; do
-    log_safe "🚩 $CHAIN_LAN 忽略本机 $ip"
-    $ip_cmd -t mangle -A "$CHAIN_LAN" -d "$ip" -j ACCEPT
+    log_safe "🚩 $CHAIN_LAN RETURN 本机 $ip"
+    $ip_cmd -t mangle -A "$CHAIN_LAN" -d "$ip" -j RETURN
   done
 }
 
@@ -172,13 +179,11 @@ add_tproxy_rules() {
     localhost="127.0.0.1"
     fire="$FAIR4"
     proto_icmp="icmp"
-    lan_ips="$INTRANET4"
     ;;
   ip6tables*)
     localhost="::1"
     fire="$FAIR6"
     proto_icmp="icmpv6"
-    lan_ips="$INTRANET6"
     ;;
   esac
 
@@ -188,19 +193,16 @@ add_tproxy_rules() {
     $ip_cmd -t mangle -F "$chain"
   done
 
-  # log_safe "🧵 MARK PREROUTING socket transparent"
-  # $ip_cmd -t mangle -A "$CHAIN_PRE" -p tcp -m socket --transparent -j MARK --set-xmark "$MARK_HEX"
-  # $ip_cmd -t mangle -A "$CHAIN_PRE" -p udp -m socket --transparent -j MARK --set-xmark "$MARK_HEX"
-  # $ip_cmd -t mangle -A "$CHAIN_PRE" -m socket -j RETURN
-
-  # log_safe "⭕ $CHAIN_PRE 忽略来自 lo 且未标记的流量"
-  # $ip_cmd -t mangle -A "$CHAIN_PRE" -i lo -m mark --mark 0x0/0x1 -j RETURN
+  log_safe "🧵 MARK PREROUTING socket transparent"
+  $ip_cmd -t mangle -A "$CHAIN_PRE" -p tcp -m socket --transparent -j MARK --set-xmark "$MARK_HEX"
+  $ip_cmd -t mangle -A "$CHAIN_PRE" -p udp -m socket --transparent -j MARK --set-xmark "$MARK_HEX"
+  $ip_cmd -t mangle -A "$CHAIN_PRE" -m socket -j RETURN
 
   log_safe "📢 $CHAIN_OUT RETURN 代理核心自身 $USER_ID:$GROUP_ID"
   $ip_cmd -t mangle -A "$CHAIN_OUT" -m owner --uid-owner "$USER_ID" --gid-owner "$GROUP_ID" -j RETURN
 
-  # log_safe "📢 $CHAIN_OUT RETURN 已 mark 的流量 "
-  # $ip_cmd -t mangle -A "$CHAIN_OUT" -m mark --mark "$MARK_HEX" -j RETURN
+  log_safe "📢 $CHAIN_OUT RETURN 已 mark 的流量 "
+  $ip_cmd -t mangle -A "$CHAIN_OUT" -m mark --mark "$MARK_HEX" -j RETURN
 
   for ignore in $IGNORE_LIST; do
     log_safe "🎈 $CHAIN_OUT RETURN 对外接口 $ignore"
@@ -242,10 +244,7 @@ add_tproxy_rules() {
   esac
 
   for chain in $CHAIN_PRE $CHAIN_OUT; do
-    for ip in $lan_ips; do
-      log_safe "🚩 $chain RETURN 局域网 $ip"
-      $ip_cmd -t mangle -A "$chain" -d "$ip" -j RETURN
-    done
+    log_safe "🔗 $chain 跳转至 $CHAIN_LAN 进行局域网豁免"
     $ip_cmd -t mangle -A "$chain" -j "$CHAIN_LAN"
   done
 
@@ -273,11 +272,11 @@ add_tproxy_rules() {
   log_safe "💉 $CHAIN_OUT 挂接至 OUTPUT"
   ensure_hook "$ip_cmd" mangle OUTPUT "$CHAIN_OUT"
 
-  log_safe "🧵 MARK PREROUTING socket transparent -> DIVERT"
-  $ip_cmd -t mangle -A DIVERT -j MARK --set-xmark "$MARK_HEX"
-  $ip_cmd -t mangle -A DIVERT -j ACCEPT
-  $ip_cmd -t mangle -I PREROUTING -p tcp -m socket --transparent -j DIVERT
-  $ip_cmd -t mangle -I PREROUTING -p udp -m socket --transparent -j DIVERT
+  # log_safe "🧵 MARK PREROUTING socket transparent -> DIVERT"
+  # $ip_cmd -t mangle -A DIVERT -j MARK --set-xmark "$MARK_HEX"
+  # $ip_cmd -t mangle -A DIVERT -j ACCEPT
+  # $ip_cmd -t mangle -I PREROUTING -p tcp -m socket --transparent -j DIVERT
+  # $ip_cmd -t mangle -I PREROUTING -p udp -m socket --transparent -j DIVERT
 
   log_safe "🗜️ FORWARD 链中添加 TCP MSS 钳制规则"
   $ip_cmd -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
