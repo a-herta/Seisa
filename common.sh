@@ -6,7 +6,7 @@
 # --- 模块路径与标识 ---
 MODDIR=${MODDIR:-$(dirname "$0")}
 MODID=${MODID:-$(basename "$MODDIR")}
-PERSIST_DIR=${PERSIST_DIR:-"../../$MODID"}
+PERSIST_DIR=${PERSIST_DIR:-"/data/adb/$MODID"}
 if [ ! -f "/system/build.prop" ]; then
   PERSIST_DIR=$MODDIR
 fi

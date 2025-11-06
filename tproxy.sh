@@ -149,19 +149,12 @@ update_lan_rules() {
 
   case "$ip_cmd" in
   iptables*)
-    lan_ips="$INTRANET4"
     local_ips=$(ip -4 a | awk '/inet/ {print $2}' | grep -vE "^127.0.0.1")
     ;;
   ip6tables*)
-    lan_ips="$INTRANET6"
     local_ips=$(ip -6 a | awk '/inet6/ {print $2}' | grep -vE "^fe80|^::1")
     ;;
   esac
-
-  for ip in $lan_ips; do
-    log_safe "🚩 $CHAIN_LAN RETURN 局域网 $ip"
-    $ip_cmd -t mangle -A "$CHAIN_LAN" -d "$ip" -j RETURN
-  done
 
   for ip in $local_ips; do
     log_safe "🚩 $CHAIN_LAN RETURN 本机 $ip"
@@ -179,11 +172,13 @@ add_tproxy_rules() {
     localhost="127.0.0.1"
     fire="$FAIR4"
     proto_icmp="icmp"
+    lan_ips="$INTRANET4"
     ;;
   ip6tables*)
     localhost="::1"
     fire="$FAIR6"
     proto_icmp="icmpv6"
+    lan_ips="$INTRANET6"
     ;;
   esac
 
@@ -244,6 +239,10 @@ add_tproxy_rules() {
   esac
 
   for chain in $CHAIN_PRE $CHAIN_OUT; do
+    for ip in $lan_ips; do
+      log_safe "🚩 $CHAIN_LAN RETURN 局域网 $ip"
+      $ip_cmd -t mangle -A "$chain" -d "$ip" -j RETURN
+    done
     log_safe "🔗 $chain 跳转至 $CHAIN_LAN 进行局域网豁免"
     $ip_cmd -t mangle -A "$chain" -j "$CHAIN_LAN"
   done
